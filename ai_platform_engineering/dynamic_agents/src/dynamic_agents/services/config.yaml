@@ -78,6 +78,13 @@ mcp_servers:
     name: ArgoCD
     transport: http
 
+  - description: Woodpecker CI pipeline and deployment status
+    enabled: true
+    endpoint: ${WOODPECKER_MCP_URL:-http://localhost:18014/mcp}
+    id: woodpecker
+    name: Woodpecker CI
+    transport: http
+
   - description: Jira issue tracking and project management
     enabled: true
     endpoint: ${JIRA_MCP_URL:-http://localhost:18004/mcp}
