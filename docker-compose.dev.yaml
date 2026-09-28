@@ -462,6 +462,64 @@ services:
       - netutils-agent
       - mcp-servers
 
+  mcp-infra-ops:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=infra_ops
+    image: ghcr.io/cnoe-io/mcp-infra-ops:${IMAGE_TAG:-localtag}
+    container_name: mcp-infra-ops
+    env_file: [.env]
+    ports: ["18015:8000"]
+    volumes:
+      - ./ai_platform_engineering/mcp/infra_ops:/app/ai_platform_engineering/mcp/infra_ops
+      - ${INFRA_OPS_SSH_KEY_PATH:-/dev/null}:/run/secrets/infra_ops_ssh_key:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - INFRA_OPS_SSH_HOST=${INFRA_OPS_SSH_HOST:-}
+      - INFRA_OPS_SSH_USER=${INFRA_OPS_SSH_USER:-}
+      - INFRA_OPS_SSH_KEY_PATH=/run/secrets/infra_ops_ssh_key
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not part of the default `mcp-servers` bundle: this agent needs an
+    # operator-specific SSH key/target and isn't relevant to a first-time
+    # OSS install. Enable explicitly with the `infra-ops-agent` profile.
+    profiles:
+      - infra-ops-agent
+
+  infra-ops-monitor:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=infra_ops
+    image: ghcr.io/cnoe-io/mcp-infra-ops:${IMAGE_TAG:-localtag}
+    container_name: infra-ops-monitor
+    env_file: [.env]
+    command: ["sh", "-c", "exec python monitor.py"]
+    volumes:
+      - ./ai_platform_engineering/mcp/infra_ops:/app/ai_platform_engineering/mcp/infra_ops
+      - ${INFRA_OPS_SSH_KEY_PATH:-/dev/null}:/run/secrets/infra_ops_ssh_key:ro
+    environment:
+      - INFRA_OPS_SSH_HOST=${INFRA_OPS_SSH_HOST:-}
+      - INFRA_OPS_SSH_USER=${INFRA_OPS_SSH_USER:-}
+      - INFRA_OPS_SSH_KEY_PATH=/run/secrets/infra_ops_ssh_key
+      - INFRA_OPS_ALERT_WEBHOOK_URL=${INFRA_OPS_ALERT_WEBHOOK_URL:-}
+      - INFRA_OPS_CHECK_INTERVAL_SECONDS=${INFRA_OPS_CHECK_INTERVAL_SECONDS:-60}
+      - INFRA_OPS_DISK_THRESHOLD_PERCENT=${INFRA_OPS_DISK_THRESHOLD_PERCENT:-90}
+      - INFRA_OPS_LOAD_THRESHOLD=${INFRA_OPS_LOAD_THRESHOLD:-6.0}
+    # Alert-only background loop, not an MCP server - no ports exposed.
+    # Same operator-only gating as mcp-infra-ops.
+    profiles:
+      - infra-ops-agent
+
   ####################################################################################################
   #                                      CAIPE UI                                                    #
   ####################################################################################################
