@@ -16,6 +16,7 @@
     "aws",
     "backstage",
     "confluence",
+    "infra_ops",
     "jira",
     "komodor",
     "litellm",
