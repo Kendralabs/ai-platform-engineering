@@ -2,6 +2,8 @@
 
 import { Settings,Sparkles } from "lucide-react";
 
+import { getConfig } from "@/lib/config";
+
 interface WelcomeBannerProps {
   userName?: string | null;
   onOpenPreferences?: () => void;
@@ -20,7 +22,7 @@ export function WelcomeBanner({ userName, onOpenPreferences }: WelcomeBannerProp
             <span className="text-sm font-medium text-white/80">{greeting}</span>
           </div>
           <h1 className="text-2xl font-bold text-white">
-            {displayName ? `Welcome back, ${displayName}` : "Welcome to CAIPE"}
+            {displayName ? `Welcome back, ${displayName}` : `Welcome to ${getConfig('appName')}`}
           </h1>
           <p className="text-sm text-white/70 mt-1">
             Your AI-powered platform engineering assistant
