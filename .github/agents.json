@@ -15,6 +15,7 @@
     "argocd",
     "aws",
     "azure_cluster_ops",
+    "azure_core_services_ops",
     "azure_cost_ops",
     "azure_power_ops",
     "backstage",
