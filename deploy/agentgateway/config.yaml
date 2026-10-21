@@ -239,6 +239,39 @@ binds:
           targets:
           - name: webex
             mcp: { host: http://mcp-webex:8000/mcp }
+    # Azure agent set (azure-power-ops-agent/azure-cost-ops-agent/
+    # azure-cluster-ops-agent/azure-core-services-ops-agent Compose profiles).
+    # Each resolves its own customer registry from envs/azure/ and runs `az`
+    # via a service-principal login - no per-user provider token to forward,
+    # so these use the shared *mcpAuthzPolicy like argocd/backstage/komodor.
+    - matches: [{ path: { pathPrefix: /mcp/azure-power-ops } }]
+      policies: *mcpAuthzPolicy
+      backends:
+      - mcp:
+          targets:
+          - name: azure-power-ops
+            mcp: { host: http://mcp-azure-power-ops:8000/mcp }
+    - matches: [{ path: { pathPrefix: /mcp/azure-cost-ops } }]
+      policies: *mcpAuthzPolicy
+      backends:
+      - mcp:
+          targets:
+          - name: azure-cost-ops
+            mcp: { host: http://mcp-azure-cost-ops:8000/mcp }
+    - matches: [{ path: { pathPrefix: /mcp/azure-cluster-ops } }]
+      policies: *mcpAuthzPolicy
+      backends:
+      - mcp:
+          targets:
+          - name: azure-cluster-ops
+            mcp: { host: http://mcp-azure-cluster-ops:8000/mcp }
+    - matches: [{ path: { pathPrefix: /mcp/azure-core-services-ops } }]
+      policies: *mcpAuthzPolicy
+      backends:
+      - mcp:
+          targets:
+          - name: azure-core-services-ops
+            mcp: { host: http://mcp-azure-core-services-ops:8000/mcp }
 
 config:
   # Default is localhost-only; use 0.0.0.0 so Docker can publish :15000 to the host.
