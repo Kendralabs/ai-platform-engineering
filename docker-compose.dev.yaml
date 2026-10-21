@@ -462,6 +462,226 @@ services:
       - netutils-agent
       - mcp-servers
 
+  mcp-infra-ops:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=infra_ops
+    image: ghcr.io/cnoe-io/mcp-infra-ops:${IMAGE_TAG:-localtag}
+    container_name: mcp-infra-ops
+    env_file: [.env]
+    ports: ["18015:8000"]
+    volumes:
+      - ./ai_platform_engineering/mcp/infra_ops:/app/ai_platform_engineering/mcp/infra_ops
+      - ${INFRA_OPS_SSH_KEY_PATH:-/dev/null}:/run/secrets/infra_ops_ssh_key:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - INFRA_OPS_SSH_HOST=${INFRA_OPS_SSH_HOST:-}
+      - INFRA_OPS_SSH_USER=${INFRA_OPS_SSH_USER:-}
+      - INFRA_OPS_SSH_KEY_PATH=/run/secrets/infra_ops_ssh_key
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not part of the default `mcp-servers` bundle: this agent needs an
+    # operator-specific SSH key/target and isn't relevant to a first-time
+    # OSS install. Enable explicitly with the `infra-ops-agent` profile.
+    profiles:
+      - infra-ops-agent
+
+  infra-ops-monitor:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=infra_ops
+    image: ghcr.io/cnoe-io/mcp-infra-ops:${IMAGE_TAG:-localtag}
+    container_name: infra-ops-monitor
+    env_file: [.env]
+    command: ["sh", "-c", "exec python monitor.py"]
+    volumes:
+      - ./ai_platform_engineering/mcp/infra_ops:/app/ai_platform_engineering/mcp/infra_ops
+      - ${INFRA_OPS_SSH_KEY_PATH:-/dev/null}:/run/secrets/infra_ops_ssh_key:ro
+    environment:
+      - INFRA_OPS_SSH_HOST=${INFRA_OPS_SSH_HOST:-}
+      - INFRA_OPS_SSH_USER=${INFRA_OPS_SSH_USER:-}
+      - INFRA_OPS_SSH_KEY_PATH=/run/secrets/infra_ops_ssh_key
+      - INFRA_OPS_ALERT_WEBHOOK_URL=${INFRA_OPS_ALERT_WEBHOOK_URL:-}
+      - INFRA_OPS_CHECK_INTERVAL_SECONDS=${INFRA_OPS_CHECK_INTERVAL_SECONDS:-60}
+      - INFRA_OPS_DISK_THRESHOLD_PERCENT=${INFRA_OPS_DISK_THRESHOLD_PERCENT:-90}
+      - INFRA_OPS_LOAD_THRESHOLD=${INFRA_OPS_LOAD_THRESHOLD:-6.0}
+    # Alert-only background loop, not an MCP server - no ports exposed.
+    # Same operator-only gating as mcp-infra-ops.
+    profiles:
+      - infra-ops-agent
+
+  mcp-power-ops:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=power_ops
+    image: ghcr.io/cnoe-io/mcp-power-ops:${IMAGE_TAG:-localtag}
+    container_name: mcp-power-ops
+    env_file: [.env]
+    ports: ["18016:8000"]
+    volumes:
+      - ./ai_platform_engineering/mcp/power_ops:/app/ai_platform_engineering/mcp/power_ops
+      - ${POWER_OPS_CAIPEADMIN_SSH_KEY_PATH:-/dev/null}:/run/secrets/power_ops_caipeadmin_ssh_key:ro
+      - ${POWER_OPS_ROOT_SSH_KEY_PATH:-/dev/null}:/run/secrets/power_ops_root_ssh_key:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      # Two separate rootless podman namespaces on the VPS (caipeadmin owns
+      # the caipe-core stack, root owns the KCG/Gemma/Korch stack) - see
+      # ai_platform_engineering/mcp/power_ops/README.md.
+      - POWER_OPS_SSH_HOST=${POWER_OPS_SSH_HOST:-}
+      - POWER_OPS_CAIPEADMIN_SSH_USER=${POWER_OPS_CAIPEADMIN_SSH_USER:-}
+      - POWER_OPS_CAIPEADMIN_SSH_KEY_PATH=/run/secrets/power_ops_caipeadmin_ssh_key
+      - POWER_OPS_ROOT_SSH_USER=${POWER_OPS_ROOT_SSH_USER:-}
+      - POWER_OPS_ROOT_SSH_KEY_PATH=/run/secrets/power_ops_root_ssh_key
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not part of the default `mcp-servers` bundle, and kept in its own
+    # profile separate from infra-ops-agent: this tool's blast radius is
+    # whole component groups, not one container, so it should be grantable
+    # to a narrower set of operators independently. Enable explicitly with
+    # the `power-ops-agent` profile.
+    profiles:
+      - power-ops-agent
+
+  mcp-azure-power-ops:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=azure_power_ops
+    image: ghcr.io/cnoe-io/mcp-azure-power-ops:${IMAGE_TAG:-localtag}
+    container_name: mcp-azure-power-ops
+    env_file: [.env]
+    ports: ["18017:8000"]
+    volumes:
+      - ./ai_platform_engineering/mcp/azure_power_ops:/app/ai_platform_engineering/mcp/azure_power_ops
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_POWER_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_POWER_OPS_INFRA_REPO_PATH=/infra-repo
+      # Azure service principal - same credentials kendrainfra's own
+      # Jenkinsfile uses for Terraform. See
+      # ai_platform_engineering/mcp/azure_power_ops/README.md.
+      - ARM_CLIENT_ID=${AZURE_POWER_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_POWER_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_POWER_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_POWER_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not part of the default `mcp-servers` bundle, and kept in its own
+    # profile separate from power-ops-agent: this tool's blast radius is a
+    # whole customer Azure environment's compute+database, costlier and
+    # slower to reverse than a VPS container. Enable explicitly with the
+    # `azure-power-ops-agent` profile.
+    profiles:
+      - azure-power-ops-agent
+
+  mcp-azure-cost-ops:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=azure_cost_ops
+    image: ghcr.io/cnoe-io/mcp-azure-cost-ops:${IMAGE_TAG:-localtag}
+    container_name: mcp-azure-cost-ops
+    env_file: [.env]
+    ports: ["18018:8000"]
+    volumes:
+      - ./ai_platform_engineering/mcp/azure_cost_ops:/app/ai_platform_engineering/mcp/azure_cost_ops
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_COST_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_COST_OPS_INFRA_REPO_PATH=/infra-repo
+      # Azure service principal - same credentials kendrainfra's own
+      # Jenkinsfile uses for Terraform. See
+      # ai_platform_engineering/mcp/azure_cost_ops/README.md.
+      - ARM_CLIENT_ID=${AZURE_COST_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_COST_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_COST_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_COST_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not part of the default `mcp-servers` bundle, and kept in its own
+    # profile separate from azure-power-ops-agent: this tool's write action
+    # (budget alerts) has a different blast radius than power on/off.
+    # Enable explicitly with the `azure-cost-ops-agent` profile.
+    profiles:
+      - azure-cost-ops-agent
+
+  mcp-azure-cluster-ops:
+    build:
+      context: .
+      dockerfile: build/agents/Dockerfile.mcp
+      args:
+        - AGENT_NAME=azure_cluster_ops
+    image: ghcr.io/cnoe-io/mcp-azure-cluster-ops:${IMAGE_TAG:-localtag}
+    container_name: mcp-azure-cluster-ops
+    env_file: [.env]
+    ports: ["18019:8000"]
+    volumes:
+      - ./ai_platform_engineering/mcp/azure_cluster_ops:/app/ai_platform_engineering/mcp/azure_cluster_ops
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_CLUSTER_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_CLUSTER_OPS_INFRA_REPO_PATH=/infra-repo
+      # Azure service principal - same credentials kendrainfra's own
+      # Jenkinsfile uses for Terraform. See
+      # ai_platform_engineering/mcp/azure_cluster_ops/README.md.
+      - ARM_CLIENT_ID=${AZURE_CLUSTER_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_CLUSTER_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_CLUSTER_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not part of the default `mcp-servers` bundle, and kept in its own
+    # profile separate from azure-power-ops-agent/azure-cost-ops-agent: this
+    # tool's write action (node pool scaling) has a different blast radius
+    # than power on/off or a budget alert. Enable explicitly with the
+    # `azure-cluster-ops-agent` profile.
+    profiles:
+      - azure-cluster-ops-agent
+
   ####################################################################################################
   #                                      CAIPE UI                                                    #
   ####################################################################################################

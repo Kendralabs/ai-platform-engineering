@@ -1,0 +1,26 @@
+# .bump-version.config — copy to the repo root (not scripts/generic/) and
+# rename to `.bump-version.config`. One directive per line.
+#
+#   file:<path>       a JSON ("version": "...") or TOML (version = "...")
+#                      file to keep in sync with VERSION. Detected by
+#                      extension — only .json and .toml are auto-handled.
+#   builddate:<path>  a file with a line like BUILD_DATE = "YYYY-MM-DD"
+#                      whose date is set to today on every bump. Useful for
+#                      an About/status page that shows when the running
+#                      version was cut.
+#
+# Blank lines and lines starting with # are ignored.
+
+# --- KCG's actual config, as a worked example ---
+# file:pyproject.toml
+# file:package.json
+# file:ui/kcg-dashboard/package.json
+# file:website/package.json
+# builddate:src/__version__.py
+
+# --- A typical Node-only service would need just: ---
+# file:package.json
+
+# --- A typical Python-only service would need just: ---
+# file:pyproject.toml
+# builddate:src/version.py
