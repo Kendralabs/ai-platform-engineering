@@ -248,7 +248,9 @@ services:
       - mcp-servers
 
   mcp-infra-ops:
-    image: ghcr.io/cnoe-io/mcp-infra-ops:${IMAGE_TAG:-0.5.66}
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-infra_ops:${KENDRALABS_IMAGE_TAG:-latest}
     container_name: mcp-infra-ops
     env_file: [.env]
     ports: ["18015:8000"]
@@ -273,6 +275,144 @@ services:
     # OSS install. Enable explicitly with the `infra-ops-agent` profile.
     profiles:
       - infra-ops-agent
+
+  mcp-azure-power-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-azure_power_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-azure-power-ops
+    env_file: [.env]
+    ports: ["18017:8000"]
+    volumes:
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_POWER_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_POWER_OPS_INFRA_REPO_PATH=/infra-repo
+      - ARM_CLIENT_ID=${AZURE_POWER_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_POWER_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_POWER_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_POWER_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile: this tool's blast radius is a whole customer Azure
+    # environment's compute, costlier and slower to reverse than a VPS
+    # container. Enable explicitly with the `azure-power-ops-agent` profile.
+    profiles:
+      - azure-power-ops-agent
+
+  mcp-azure-cost-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-azure_cost_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-azure-cost-ops
+    env_file: [.env]
+    ports: ["18018:8000"]
+    volumes:
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_COST_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_COST_OPS_INFRA_REPO_PATH=/infra-repo
+      - ARM_CLIENT_ID=${AZURE_COST_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_COST_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_COST_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_COST_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile, separate from azure-power-ops-agent: this tool's write
+    # action (budget alerts) has a different blast radius than power
+    # on/off. Enable explicitly with the `azure-cost-ops-agent` profile.
+    profiles:
+      - azure-cost-ops-agent
+
+  mcp-azure-cluster-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-azure_cluster_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-azure-cluster-ops
+    env_file: [.env]
+    ports: ["18019:8000"]
+    volumes:
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_CLUSTER_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_CLUSTER_OPS_INFRA_REPO_PATH=/infra-repo
+      - ARM_CLIENT_ID=${AZURE_CLUSTER_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_CLUSTER_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_CLUSTER_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile, separate from azure-power-ops-agent/azure-cost-ops-agent:
+    # this tool's write action (node pool scaling) has a different blast
+    # radius than power on/off or a budget alert. Enable explicitly with
+    # the `azure-cluster-ops-agent` profile.
+    profiles:
+      - azure-cluster-ops-agent
+
+  mcp-azure-core-services-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-azure_core_services_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-azure-core-services-ops
+    env_file: [.env]
+    ports: ["18020:8000"]
+    volumes:
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${AZURE_CORE_SERVICES_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - AZURE_CORE_SERVICES_OPS_INFRA_REPO_PATH=/infra-repo
+      - ARM_CLIENT_ID=${AZURE_CORE_SERVICES_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${AZURE_CORE_SERVICES_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${AZURE_CORE_SERVICES_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${AZURE_CORE_SERVICES_OPS_ARM_SUBSCRIPTION_ID:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile: this server has no write tools at all (read-only
+    # VNet/Key Vault/Postgres/workload-identity visibility), a different
+    # blast radius than any of the others. Enable explicitly with the
+    # `azure-core-services-ops-agent` profile.
+    profiles:
+      - azure-core-services-ops-agent
 
   ####################################################################################################
   #                                      CAIPE UI & MongoDB                                          #
