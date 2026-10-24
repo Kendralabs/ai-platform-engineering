@@ -63,10 +63,13 @@ jobs:
       image_prefix: ${{ steps.set-matrix.outputs.image_prefix }}
     env:
       ALL_AGENTS: ${{ needs.load-config.outputs.all_agents }}
+      # `secrets` can't be referenced directly in an `if:` conditional, so
+      # surface it via env first (see the other three app-token steps below).
+      CI_MCP_APP_ID_SET: ${{ secrets.CI_MCP_APP_ID != '' }}
     steps:
       - name: 🔑 Generate GitHub App token
         id: app-token
-        if: ${{ github.event_name != 'pull_request' && secrets.CI_MCP_APP_ID != '' }}
+        if: ${{ github.event_name != 'pull_request' && env.CI_MCP_APP_ID_SET == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ secrets.CI_MCP_APP_ID }}
@@ -204,6 +207,8 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
+      # `secrets` can't be referenced directly in an `if:` conditional.
+      CI_MCP_APP_ID_SET: ${{ secrets.CI_MCP_APP_ID != '' }}
 
     steps:
       - name: 🔒 harden runner
@@ -213,7 +218,7 @@ jobs:
 
       - name: 🔑 Generate GitHub App token
         id: app-token
-        if: ${{ secrets.CI_MCP_APP_ID != '' }}
+        if: ${{ env.CI_MCP_APP_ID_SET == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ secrets.CI_MCP_APP_ID }}
@@ -359,6 +364,8 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
+      # `secrets` can't be referenced directly in an `if:` conditional.
+      CI_MCP_APP_ID_SET: ${{ secrets.CI_MCP_APP_ID != '' }}
 
     steps:
       - name: 🔒 Harden runner
@@ -368,7 +375,7 @@ jobs:
 
       - name: 🔑 Generate GitHub App token
         id: app-token
-        if: ${{ secrets.CI_MCP_APP_ID != '' }}
+        if: ${{ env.CI_MCP_APP_ID_SET == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ secrets.CI_MCP_APP_ID }}
@@ -494,10 +501,13 @@ jobs:
       always() &&
       needs.determine-agents.outputs.tag_version != '' &&
       !contains(needs.determine-agents.outputs.tag_version, '-')
+    env:
+      # `secrets` can't be referenced directly in an `if:` conditional.
+      CI_MCP_APP_ID_SET: ${{ secrets.CI_MCP_APP_ID != '' }}
     steps:
       - name: 🔑 Generate GitHub App token
         id: app-token
-        if: ${{ secrets.CI_MCP_APP_ID != '' }}
+        if: ${{ env.CI_MCP_APP_ID_SET == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ secrets.CI_MCP_APP_ID }}
