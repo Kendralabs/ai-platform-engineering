@@ -597,7 +597,7 @@ services:
       # port — current behavior, unchanged.
       - METRICS_PORT=${DYNAMIC_AGENTS_METRICS_PORT:-0}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -672,7 +672,7 @@ services:
         condition: service_started
         required: false
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1320,8 +1320,10 @@ services:
     volumes:
       - ./charts/ai-platform-engineering/charts/keycloak/scripts/init-idp.sh:/scripts/init-idp.sh:ro
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Override via .env if the Keycloak admin account was rotated to a
+      # different username/password than the server's own bootstrap admin.
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       IDP_ALIAS: ${IDP_ALIAS:-}
       IDP_DISPLAY_NAME: ${IDP_DISPLAY_NAME:-}
       IDP_ISSUER: ${IDP_ISSUER:-}
@@ -1373,8 +1375,10 @@ services:
     volumes:
       - ./deploy/keycloak/init-token-exchange.sh:/scripts/init-token-exchange.sh:ro
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Override via .env if the Keycloak admin account was rotated to a
+      # different username/password than the server's own bootstrap admin.
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_REALM: caipe
       KC_BOT_CLIENT_ID: caipe-slack-bot
       KC_SSL_REQUIRED: none
