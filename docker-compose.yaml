@@ -597,7 +597,7 @@ services:
       # port — current behavior, unchanged.
       - METRICS_PORT=${DYNAMIC_AGENTS_METRICS_PORT:-0}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -672,7 +672,7 @@ services:
         condition: service_started
         required: false
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
       interval: 30s
       timeout: 5s
       retries: 3
