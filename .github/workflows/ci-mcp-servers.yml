@@ -61,6 +61,7 @@ jobs:
       should_retag: ${{ steps.set-matrix.outputs.should_retag }}
       tag_version: ${{ steps.version.outputs.tag_version }}
       image_prefix: ${{ steps.set-matrix.outputs.image_prefix }}
+      image_owner: ${{ steps.set-matrix.outputs.image_owner }}
     env:
       ALL_AGENTS: ${{ needs.load-config.outputs.all_agents }}
       # `secrets` can't be referenced directly in an `if:` conditional, so
@@ -137,6 +138,7 @@ jobs:
               core.setOutput('should_build', 'false');
               core.setOutput('should_retag', 'false');
               core.setOutput('image_prefix', '');
+              core.setOutput('image_owner', context.repo.owner.toLowerCase());
               return;
             }
 
@@ -174,6 +176,9 @@ jobs:
             core.setOutput('should_build', String(agentsToBuild.length > 0));
             core.setOutput('should_retag', String(agentsToRetag.length > 0 && !!tagVersion));
             core.setOutput('image_prefix', imagePrefix);
+            // GHCR repository names must be lowercase; github.repository_owner
+            // preserves the org's display case (e.g. "Kendralabs").
+            core.setOutput('image_owner', context.repo.owner.toLowerCase());
 
             console.log(`Agents to build: ${agentsToBuild.join(', ') || 'none'}`);
             console.log(`Agents to retag: ${agentsToRetag.join(', ') || 'none'}`);
@@ -206,7 +211,7 @@ jobs:
 
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
+      IMAGE_NAME: ${{ needs.determine-agents.outputs.image_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
       # `secrets` can't be referenced directly in an `if:` conditional.
       CI_MCP_APP_ID_SET: ${{ secrets.CI_MCP_APP_ID != '' }}
 
@@ -299,7 +304,7 @@ jobs:
 
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
+      IMAGE_NAME: ${{ needs.determine-agents.outputs.image_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
 
     steps:
       - name: 🔒 harden runner
@@ -363,7 +368,7 @@ jobs:
 
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
+      IMAGE_NAME: ${{ needs.determine-agents.outputs.image_owner }}/${{ needs.determine-agents.outputs.image_prefix }}mcp-${{ matrix.agent }}
       # `secrets` can't be referenced directly in an `if:` conditional.
       CI_MCP_APP_ID_SET: ${{ secrets.CI_MCP_APP_ID != '' }}
 
