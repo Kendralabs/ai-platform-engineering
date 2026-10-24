@@ -1320,8 +1320,10 @@ services:
     volumes:
       - ./charts/ai-platform-engineering/charts/keycloak/scripts/init-idp.sh:/scripts/init-idp.sh:ro
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Override via .env if the Keycloak admin account was rotated to a
+      # different username/password than the server's own bootstrap admin.
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       IDP_ALIAS: ${IDP_ALIAS:-}
       IDP_DISPLAY_NAME: ${IDP_DISPLAY_NAME:-}
       IDP_ISSUER: ${IDP_ISSUER:-}
@@ -1373,8 +1375,10 @@ services:
     volumes:
       - ./deploy/keycloak/init-token-exchange.sh:/scripts/init-token-exchange.sh:ro
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Override via .env if the Keycloak admin account was rotated to a
+      # different username/password than the server's own bootstrap admin.
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_REALM: caipe
       KC_BOT_CLIENT_ID: caipe-slack-bot
       KC_SSL_REQUIRED: none
