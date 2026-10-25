@@ -36,7 +36,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,7 +58,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,7 +96,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -119,7 +119,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -140,7 +140,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -191,7 +191,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -213,7 +213,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -236,7 +236,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -264,7 +264,7 @@ services:
       - INFRA_OPS_SSH_USER=${INFRA_OPS_SSH_USER:-}
       - INFRA_OPS_SSH_KEY_PATH=/run/secrets/infra_ops_ssh_key
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -297,7 +297,7 @@ services:
       - ARM_TENANT_ID=${AZURE_POWER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_POWER_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -331,7 +331,7 @@ services:
       - ARM_TENANT_ID=${AZURE_COST_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_COST_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -365,7 +365,7 @@ services:
       - ARM_TENANT_ID=${AZURE_CLUSTER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CLUSTER_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -400,7 +400,7 @@ services:
       - ARM_TENANT_ID=${AZURE_CORE_SERVICES_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CORE_SERVICES_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -625,11 +625,9 @@ services:
     volumes:
       - audit_service_data:/var/lib/caipe-audit-service
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import json,urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8010/readyz',timeout=3); sys.exit(0 if r.status==200 and json.load(r).get('status')=='ready' else 1)"
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on some hosts.
+      test: ["CMD-SHELL", "python -c \"import json,urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8010/readyz',timeout=3); sys.exit(0 if r.status==200 and json.load(r).get('status')=='ready' else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1685,11 +1683,9 @@ services:
     ports:
       - "127.0.0.1:${OPENFGA_BRIDGE_PORT:-9100}:9100"
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import socket; socket.create_connection(('localhost', 9100), timeout=2).close()"
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on some hosts.
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('localhost', 9100), timeout=2).close()\""]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -1729,21 +1725,24 @@ services:
     tmpfs:
       - /tmp
     healthcheck:
+      # CMD-SHELL (single string) rather than CMD exec-array: the exec-array
+      # form here was getting re-split on whitespace by the compose tooling
+      # on some hosts, turning this into a no-op "python -c import" and
+      # failing every single probe. See docker-compose.yaml git history.
       test:
-        - CMD
-        - python
-        - -c
+        - CMD-SHELL
         - |
+          python -c "
           from pathlib import Path
           import json
           import sys
           import yaml
 
-          config_path = Path("/generated/config.yaml")
-          marker_path = Path("/generated/.reconcile_ok")
+          config_path = Path(\"/generated/config.yaml\")
+          marker_path = Path(\"/generated/.reconcile_ok\")
           if not config_path.is_file() or config_path.stat().st_size <= 0 or not marker_path.is_file():
               sys.exit(1)
-          text = config_path.read_text(encoding="utf-8")
+          text = config_path.read_text(encoding=\"utf-8\")
           try:
               json.loads(text)
           except json.JSONDecodeError:
@@ -1754,6 +1753,7 @@ services:
               if not isinstance(parsed, dict):
                   sys.exit(1)
           sys.exit(0)
+          "
       interval: 5s
       timeout: 3s
       retries: 12
