@@ -544,6 +544,11 @@ services:
       # Compact header shortcut that reuses the existing feedback dialog.
       - PROVIDE_FEEDBACK_ENABLED=${PROVIDE_FEEDBACK_ENABLED:-false}
       - DYNAMIC_AGENTS_URL=${DYNAMIC_AGENTS_URL:-http://dynamic-agents:8001}
+      # Skill Scanner — when the `skill-scanner` profile is enabled, the UI
+      # uploads ZIP'd skill packages to this service for security scanning.
+      # If unreachable the UI gracefully reports "scanner unavailable" instead
+      # of failing the skill save.
+      - SKILL_SCANNER_URL=${SKILL_SCANNER_URL:-http://skill-scanner:8000}
       # Connections & Secrets. Docker Compose reads provider bootstrap values
       # from .env; Kubernetes deployments use ESO to inject the same env names.
       - CAIPE_CREDENTIALS_ENABLED=${CAIPE_CREDENTIALS_ENABLED:-false}
@@ -723,6 +728,8 @@ services:
       # Centralized Authorization Service. Dynamic Agents delegates agent-use
       # decisions to the UI BFF and fails closed with 503 if this is unset.
       - AUTHZ_SERVICE_URL=${AUTHZ_SERVICE_URL:-http://caipe-ui:3000}
+      # Skill Scanner — used when scanning skills discovered via a Skill Hub.
+      - SKILL_SCANNER_URL=${SKILL_SCANNER_URL:-http://skill-scanner:8000}
       # Tracing (Langfuse)
       - ENABLE_TRACING=${ENABLE_TRACING:-false}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
@@ -1798,6 +1805,41 @@ services:
       - /tmp
     healthcheck:
       disable: true
+
+  ####################################################################################################
+  #                                      Skill Scanner                                               #
+  ####################################################################################################
+  # cisco-ai-defense/skill-scanner running its built-in REST API server. The
+  # CAIPE UI POSTs zipped SKILL packages to /scan-upload to get static +
+  # (optionally) LLM-driven safety findings.
+  #
+  # Why standalone (not co-located with the UI/dynamic-agents):
+  #   - Avoid coupling their lifecycle to scanner pip installs.
+  #   - Independent upgrade path (scanner releases ship frequently).
+  #   - Stays unauthenticated only on the internal docker network — never
+  #     map this port on a public interface.
+  skill-scanner:
+    image: ghcr.io/cnoe-io/skill-scanner:${SKILL_SCANNER_VERSION:-2.0.11}
+    container_name: skill-scanner
+    # Bind to 127.0.0.1 only — the API has no auth and accepts arbitrary
+    # ZIPs, so it must never be reachable from outside the host.
+    ports:
+      - "127.0.0.1:8765:8000"
+    environment:
+      # Optional LLM-analyzer credentials. Leave unset to run static-only
+      # scans (still useful for catching obvious unsafe patterns).
+      - SKILL_SCANNER_LLM_API_KEY=${SKILL_SCANNER_LLM_API_KEY:-}
+      - SKILL_SCANNER_LLM_MODEL=${SKILL_SCANNER_LLM_MODEL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2).status==200 else 1)\""]
+      interval: 5m
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - skill-scanner
+      - caipe-ui-prod
 
 
 volumes:
