@@ -474,6 +474,12 @@ services:
     image: ghcr.io/cnoe-io/caipe-ui:${IMAGE_TAG:-0.5.66}
     container_name: caipe-ui
     ports: ["3000:3000"]
+    # Overlay branding assets (LOGO_URL/FAVICON_URL below) onto the published
+    # image's static dir. Needed because these files live only in this fork's
+    # source, not in the upstream-built image this service runs.
+    volumes:
+      - ./ui/public/kendra-logo.svg:/app/public/kendra-logo.svg:ro
+      - ./ui/public/kendra-favicon.svg:/app/public/kendra-favicon.svg:ro
     env_file:
       - .env
     environment:
