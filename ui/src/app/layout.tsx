@@ -53,7 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const faviconUrl = cfg.faviconUrl || "/favicon.ico";
 
   return {
-    title: `${cfg.appName} UI`,
+    title: cfg.appName,
     description: fullDescription,
     icons: {
       icon: [
@@ -63,7 +63,7 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: faviconUrl,
     },
     openGraph: {
-      title: `${cfg.appName} UI`,
+      title: cfg.appName,
       description: fullDescription,
       url: "https://caipe.example.com",
     },
