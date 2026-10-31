@@ -1819,7 +1819,7 @@ services:
   #   - Stays unauthenticated only on the internal docker network — never
   #     map this port on a public interface.
   skill-scanner:
-    image: ghcr.io/cnoe-io/skill-scanner:${SKILL_SCANNER_VERSION:-2.0.11}
+    image: ghcr.io/cnoe-io/skill-scanner:${IMAGE_TAG:-0.5.66}
     container_name: skill-scanner
     # Bind to 127.0.0.1 only — the API has no auth and accepts arbitrary
     # ZIPs, so it must never be reachable from outside the host.
