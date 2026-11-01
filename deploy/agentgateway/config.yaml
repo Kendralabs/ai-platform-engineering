@@ -14,7 +14,7 @@ binds:
     policies:
       jwtAuth:
         mode: strict
-        issuer: http://localhost:7080/realms/caipe
+        issuer: https://auth.kendralabs.com/realms/caipe
         # Spec 104: Slack-bot OBO tokens are minted with `aud=agentgateway`,
         # UI-issued tokens stay on `aud=caipe-platform`. Either is accepted
         # at the listener; fine-grained team scoping is checked by the
