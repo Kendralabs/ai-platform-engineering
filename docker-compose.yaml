@@ -297,7 +297,7 @@ services:
       - ARM_TENANT_ID=${AZURE_POWER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_POWER_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -331,7 +331,7 @@ services:
       - ARM_TENANT_ID=${AZURE_COST_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_COST_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -365,7 +365,7 @@ services:
       - ARM_TENANT_ID=${AZURE_CLUSTER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CLUSTER_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -400,7 +400,7 @@ services:
       - ARM_TENANT_ID=${AZURE_CORE_SERVICES_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CORE_SERVICES_OPS_ARM_SUBSCRIPTION_ID:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 5
