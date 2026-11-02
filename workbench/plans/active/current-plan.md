@@ -111,5 +111,7 @@ Traced the gap down to two things, both resolved:
   `workbench/runbooks/vps-llm-backend-gotchas.md`: `.env` vs `/etc/gemma4/env` key drift,
   `GEMMA_GUARD` firewall subnet gotcha, and the MongoDB-not-git location of per-agent LLM
   provider config (with the Azure Power Ops Agent fix as a worked example).
-- The temporary write-enabled `kendra_push_ed25519` / `caipe-vps-push-deploy-key` GitHub deploy key
-  on the VPS has not been deleted or rotated.
+- ~~The temporary write-enabled deploy key~~ **Resolved.** GitHub side: `gh api
+  repos/Kendralabs/ai-platform-engineering/keys` returns no registered deploy keys — already
+  clear. VPS side: deleted the closest-matching local key pair, `~/.ssh/kendra_ci_deploy_ed25519`
+  (+ `.pub`), with explicit confirmation.
