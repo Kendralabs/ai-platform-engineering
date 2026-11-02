@@ -56,13 +56,60 @@ a specific customer name") — not an infra/network error.
 - 2026-11-01: Committed root cause #1 fix (`55c5d8794`) with DCO sign-off from Alpesh Doshi, pushed
   to `Kendralabs/ai-platform-engineering` main via the `kendra_push_ed25519` deploy key on the VPS.
 
-## Outstanding / Not Yet Decided
+## Session 2: Disk Space / "Degraded" Badge / Syslog Spam (2026-11-01)
 
-- Three orphaned "Created" duplicate containers from an earlier cascading-recreate incident are
-  still present on the VPS — not yet cleaned up, not yet escalated.
-- No documentation/runbook update yet for the `.env` vs `/etc/gemma4/env` key-drift discovered this
-  session, or for the `GEMMA_GUARD` firewall subnet gotcha — worth a note so this isn't rediscovered
-  blind next time.
+### Root cause: disk at 88% used, triggering Audit Service "Degraded" storage warning
+Traced the gap down to two things, both resolved:
+
+1. **Orphaned rootless Podman stack** (`~/.local/share/containers/storage`, separate from the live
+   rootful store the real `docker compose` stack runs under) — a duplicate, half-finished `caipe`
+   compose project plus Woodpecker CI / Langfuse / Milvus RAG experiments, mostly stuck
+   `Created`/`Exited`/`Removing` for 6-8 weeks. One container (a duplicate `keycloak-postgres`) was
+   actually `Up 9 days (healthy)`, health-checking every ~6-10s the whole time. Stopped/removed all
+   containers, pruned the 15 orphaned volumes (~24G) and all unused images (~24G). Rootless store
+   went from 28.7G → 1.4M.
+2. **Syslog volume** (`/var/log/syslog.1` was 5.9G/21M lines) — top contributors were `systemd[1]`
+   (1.2M lines/week) and `monitor-cloud-backend` (1M lines/week), not primarily Podman health-check
+   spam as first assumed. Root-caused:
+   - `systemd[1]`: `slack-bot` container crash-looping — **331,340 restarts** since creation 7 days
+     ago, every cycle logging start/stop lines. Cause: missing/invalid
+     `SLACK_INTEGRATION_BOT_TOKEN`/`SLACK_BOT_TOKEN` → Slack API `not_authed` → unhandled
+     `BoltError` → immediate exit → restart policy relaunches instantly. Stopped the container
+     (`docker compose stop slack-bot`) until a valid token is configured — slack-bot isn't part of
+     the documented default profile path anyway.
+   - `monitor-cloud-backend`: unrelated third-party VPS monitoring agent at `/opt/monitor-cloud`
+     (not part of caipe), opening a fresh SSH session via `asyncssh` roughly every 1.5 minutes —
+     likely the hosting provider's own management agent. Not something to change from this repo.
+   - A separate historical crash-loop of the Azure MCP agent containers (`mcp-azure-power-ops` and
+     3 siblings, visible in `/var/log/syslog.1` from ~2026-10-28–11-01) had already self-resolved —
+     current containers are different IDs, `Up 7 hours (healthy)`.
+
+### Result
+`df -h /`: 88% → **73%** used (169G → 140G, 54G free). Audit Service disk warning should clear.
+
+### Outstanding
+- `/var/log/syslog.1` (5.9G) itself not yet compressed/removed — needs `sudo gzip` or deletion,
+  which requires write sudo I don't have; handed to the user to run.
+- `/etc/logrotate.d/rsyslog` still has no `maxsize` cap and `delaycompress` — proposed edit (add
+  `maxsize 200M`, drop `delaycompress`) given to the user to apply; not yet confirmed done.
+- Confirm the "Degraded" badge actually clears in the UI now that disk usage is down.
+- ~~The Azure Power Ops Agent's LLM provider misconfiguration~~ **Fixed.** Root cause: the agent's
+  config lives in MongoDB, not git — `caipe.dynamic_agents` doc `_id: "agent-azure-power-ops-agent"`
+  had `model.provider: "google-genai-self-hosted-llamacpp "` (invalid provider string, also had a
+  trailing space), not one of `cnoe_agent_utils.llm_factory.LLMFactory`'s supported providers.
+  The working Azure Cluster Ops Agent (`agent-azure-cluster-ops-agent`) uses the same model id
+  (`gemma-4-e2b`) with `provider: "openai"` against the self-hosted llama.cpp/Gemma endpoint —
+  updated Power Ops to match via `mongosh updateOne`, recreated `dynamic-agents`
+  (`docker compose up -d --no-deps dynamic-agents`), confirmed no `Unsupported provider` errors on
+  startup. VPS-local DB change only, not tracked in git, no PR.
+- ~~Three orphaned "Created" duplicate containers~~ **Checked, not an issue.** The three
+  hash-prefixed containers (`f344364b9d78_mcp-netutils`, `8efd4a91c573_mcp-jira`,
+  `8d1cb5240e45_mcp-webex`) are each the single running instance of that service — unusual naming
+  (cosmetic, likely from a past Podman Compose conflict-resolution rename), not a duplicate
+  running alongside a normal-named twin. No cleanup needed.
+- ~~No documentation/runbook update~~ **Done.** Written up at
+  `workbench/runbooks/vps-llm-backend-gotchas.md`: `.env` vs `/etc/gemma4/env` key drift,
+  `GEMMA_GUARD` firewall subnet gotcha, and the MongoDB-not-git location of per-agent LLM
+  provider config (with the Azure Power Ops Agent fix as a worked example).
 - The temporary write-enabled `kendra_push_ed25519` / `caipe-vps-push-deploy-key` GitHub deploy key
   on the VPS has not been deleted or rotated.
-- The "Degraded" status badge visible in the chat UI's top nav has not been investigated.
