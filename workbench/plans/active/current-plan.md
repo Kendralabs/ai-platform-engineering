@@ -1,15 +1,38 @@
 # Current Plan / Status
 
-## Status Snapshot (2026-11-06)
+## Status Snapshot (2026-11-06, latest)
 
-**Blocked, waiting on Azure support.** `~/Software/infra` (separate repo) `envs/azure/dev`
-`tofu apply` migration from `uksouth` → `westeurope` is paused mid-flight: `westeurope` is
-rejecting VNet/Key Vault/user-assigned identity/Log Analytics Workspace creation for this
-subscription with `RequestDisallowedByAzure: region is currently not accepting new customers`,
-even though RG/budget/DNS zone/role-assignment succeeded in the same region. Support ticket
-drafted (not yet confirmed submitted) with subscription ID and both failed regions' errors. See
-Session 6 below for full detail. Do not run further `tofu apply` in that repo until region
-eligibility is confirmed.
+**Container Insights on `kendra-kendralabs-aks`: blocked on cluster being stopped.** Azure
+Portal's Monitor Settings "Customize configuration" wizard has a confirmed UI bug — the Log
+Analytics workspace selector silently reverts to `kendra-dev-aks-law` (the *other* cluster's
+workspace) no matter how it's changed (mouse click, keyboard, inline "Create new", or the
+separate create-workspace dialog); 5 distinct methods failed identically across two sessions.
+Root cause found via `az aks show`: `kendra-kendralabs-aks` is in `Stopped` power state, and
+Azure rejects addon/config changes on a non-running cluster — this is almost certainly why the
+Portal wizard also misbehaved. Switched to Azure CLI to bypass the broken wizard entirely:
+created a real, confirmed Log Analytics workspace `kendra-kendralabs-aks-law` in
+`kendra-kendralabs-rg` (swedencentral) via `az monitor log-analytics workspace create` — but
+`az aks enable-addons -a monitoring` then failed with `OperationNotAllowed` (cluster not
+Running). Per explicit user choice, **left the cluster stopped** rather than starting it to
+unblock monitoring. `kendra-dev-aks` was never touched. To finish once the cluster is next
+running:
+```
+az aks enable-addons -g kendra-kendralabs-rg -n kendra-kendralabs-aks -a monitoring \
+  --workspace-resource-id /subscriptions/c53f4750-141e-4653-b484-0ca2774bca63/resourceGroups/kendra-kendralabs-rg/providers/Microsoft.OperationalInsights/workspaces/kendra-kendralabs-aks-law
+```
+
+## Status Snapshot (2026-11-06, prior)
+
+**In progress, eastus migration mostly working.** `~/Software/infra` (separate repo)
+`envs/azure/dev` `tofu apply` migration moved from `uksouth` → `westeurope` (blocked, see below)
+→ `eastus`. `eastus` is NOT subject to the "not accepting new customers" restriction — RG,
+budget, DNS zone, VNet, NSG, Key Vault, UAI, Log Analytics Workspace all succeeded there. Fixed
+three further eastus-specific issues (AKS zero availability zones, disallowed VM size, AKS
+service-CIDR/VNet overlap) one at a time via plan/apply cycles; most recent apply (PID 47846,
+`/tmp/migrate_eastus5.tfplan`) launched and is being monitored. **Postgres Flexible Server
+remains deliberately excluded/paused** — appears to be a subscription-wide restriction (zero
+supported SKUs/versions in every region checked), not region-specific; user explicitly chose to
+pause on this rather than keep burning regions. See Session 6 below for full detail.
 
 ## Status Snapshot (2026-11-01)
 
@@ -294,9 +317,10 @@ executed a real `tofu apply` for this environment (previously held off pending a
   access policy — these are what the next `tofu apply` needs to create once a working region is
   confirmed.
 
-### Outstanding
+### Outstanding (superseded by Session 7 below — kept for history)
 - Waiting on user to submit the drafted support ticket and report back which region(s) this
-  subscription is eligible for.
+  subscription is eligible for. Checked for it via `az support in-subscription tickets list` on
+  2026-11-06 — none found yet on this subscription.
 - Once confirmed: update `azure_region` in `dev/terraform.tfvars` again if westeurope isn't
   viable, `tofu plan`/`apply` (same `-exclude` flags for the 3 diagnostic-setting resources, plus
   `-replace` on the DNS zone again only if migrating regions a second time), then run the second
@@ -304,3 +328,115 @@ executed a real `tofu apply` for this environment (previously held off pending a
   `docs/runbooks/azure-platform/07-observability.md`.
 - Consider whether `customer-template`'s own default region has the same subscription-eligibility
   gap — not yet checked, only relevant if/when a new customer env is provisioned from it.
+
+## Session 7: Azure `dev` → eastus, three more fixes, Postgres paused (2026-11-06)
+
+### Summary
+Continuation of Session 6. Moved the region from `westeurope` to `eastus` (user's explicit
+choice after `westeurope` rejected core resources subscription-wide). `eastus` worked for most
+resources, then hit three more blockers, fixed one at a time, each confirmed via a clean
+`tofu plan` before applying:
+
+1. **AKS `AvailabilityZoneNotSupported`** in `eastus` (`the supported zones for location 'eastus'
+   are ''` — same shape as uksouth). Fix: `availability_zones = []` in
+   `envs/azure/dev/terraform.tfvars` (variable already existed from Session 6).
+2. **AKS VM size `Standard_D2s_v5` not allowed** for this subscription/region (error response
+   listed the full allowed-size list). Fix: added new `node_vm_size`/`user_node_pool_vm_size`
+   override variables (`envs/azure/dev/variables.tf`, wired through `main.tf`'s `module
+   "compute"`), set both to `Standard_D2s_v4` (confirmed present in Azure's allowed list) in
+   `terraform.tfvars`.
+3. **AKS `ServiceCidrOverlapExistingSubnetsCidr`**: Azure's auto-assigned default service CIDR
+   `10.0.0.0/16` collided with the VNet's own address space (also `10.0.0.0/16`, with the AKS
+   subnet at `10.0.1.0/24`). This is a genuine module bug (not a subscription quirk) — fixed at
+   the module level in `modules/azure/compute/variables.tf` + `main.tf`: added `service_cidr`
+   (default `10.1.0.0/16`) and `dns_service_ip` (default `10.1.0.10`) to the `network_profile`
+   block, non-overlapping with both the VNet (`10.0.0.0/16`) and the existing `pod_cidr`
+   (`10.244.0.0/16`). No env-level override needed — applies to every environment using this
+   module.
+
+Each plan used `-exclude` on the 3 diagnostic-setting resources (pre-existing two-step
+diagnostics convergence pattern) plus `-exclude=module.storage.azurerm_postgresql_flexible_server.this`
+(Postgres deliberately paused — see below).
+
+### Postgres Flexible Server — separately investigated, deliberately paused
+Investigated via read-only `az postgres flexible-server list-skus --location <region>` across
+`eastus`, `eastus2`, `westus2`, `southcentralus` (explicit "Subscriptions are restricted from
+provisioning in this region" message), and `centralus` (same empty-SKU result, no message) —
+**zero supported versions/SKUs in every region checked**. `Microsoft.DBforPostgreSQL` IS
+registered on the subscription (`az provider show` → `"Registered"`), ruling out a simple
+registration gap. This looks like a subscription-wide block specific to Postgres Flexible
+Server for this Startups-credits subscription, not a region issue. Escalated to the user via
+AskUserQuestion; **user chose "Fix AKS zones, pause on Postgres"** — Postgres stays excluded
+from every plan/apply until this is resolved with Azure support (the existing drafted ticket
+from Session 6 likely needs updating to call out Postgres Flexible Server specifically — not yet
+done). Full finding persisted to memory
+(`infra_azure_sponsored_subscription_region_limits.md`).
+
+### Harness guardrail note
+Each `tofu apply` in this session was blocked once by the Claude Code auto-mode "Protected-Scope
+IaC Apply" classifier (expected/standing behavior for this command shape) — explained to the
+user each time, user approved each time, apply then proceeded normally.
+
+### Current live Azure state (envs/azure/dev, `kendra-dev-rg` in `eastus`)
+As of the last confirmed-clean plan: Resource Group, Budget, Private DNS Zone, VNet, NSG,
+subnets, Key Vault, UAI, Log Analytics Workspace, Key Vault private endpoint, DNS zone VNet link
+all created. AKS cluster creation was in progress / most recently re-planned with the
+service-CIDR fix — outcome of that apply (PID 47846, log `/tmp/migrate_eastus5_apply.log`) was
+being monitored as of this update.
+
+### Outstanding — eastus migration essentially complete (2026-11-06, later same day)
+- eastus5 apply (AKS cluster + role assignments) succeeded cleanly (4 added, 0 errors).
+- Diagnostics convergence apply (eastus6 plan) also succeeded (2 added, 1 changed, 0 errors) —
+  the two-step `docs/runbooks/azure-platform/07-observability.md` process is done.
+- **Only remaining gap: Postgres Flexible Server**, still deliberately excluded from every
+  plan/apply (subscription-wide SKU restriction, see Session 7 above).
+- Updated support-ticket draft, now calling out Postgres Flexible Server specifically, saved to
+  `~/Software/infra/docs/azure-support-ticket-draft.md` — **not yet submitted**, needs the user to
+  paste it into the Azure Portal (no working `az support` CLI ticket-creation path found this
+  session).
+- Once Azure support responds/unblocks Postgres: remove the `-exclude` on
+  `module.storage.azurerm_postgresql_flexible_server.this` and run a normal `tofu plan`/`apply`.
+- Commit/push the `~/Software/infra` changes (separate repo) once the user asks — not yet
+  requested this session. Always push to the `kendralabs` remote, never `origin`/cnoe-io.
+
+## Session 8: Container Insights for `kendra-kendralabs-aks`, blocked on stopped cluster (2026-11-06)
+
+### Summary
+Separate from the `envs/azure/dev` work above — this is against the live "Kendra Platform"
+subscription's existing `kendra-kendralabs-aks` cluster (`kendra-kendralabs-rg`), discovered via
+Azure Monitor > Containers to be one of 2 unmonitored AKS clusters. User authorized enabling
+Container Insights for `kendra-kendralabs-aks` only, explicitly not `kendra-dev-aks`.
+
+### What was done
+- Spent most of two sessions fighting the Azure Portal's Monitor Settings "Customize
+  configuration" panel: the Log Analytics workspace combobox kept reverting to
+  `kendra-dev-aks-law` after every commit method tried (mouse click on filtered/unfiltered
+  option, keyboard Down+Enter, type-filter+Enter, inline "Create new" link, separate "Create Log
+  Analytics workspace" dialog) — 5 distinct failures, never once survived to "Save".
+  `javascript_tool` DOM introspection was blocked by same-origin iframe sandboxing, ruling out a
+  scripted workaround.
+- Switched to `az` CLI (already authenticated to "Kendra Platform" subscription) to bypass the
+  wizard. `az monitor log-analytics workspace list -g kendra-kendralabs-rg` confirmed zero
+  workspaces existed yet — proving the Portal's repeated "(New) kendra-kendralabs-aks-law"
+  dropdown entries from earlier attempts had never actually persisted as real resources.
+- Created `kendra-kendralabs-aks-law` for real via `az monitor log-analytics workspace create`
+  (swedencentral, `kendra-kendralabs-rg`) — confirmed `provisioningState: Succeeded`.
+- Ran `az aks enable-addons -a monitoring --workspace-resource-id ...` against
+  `kendra-kendralabs-aks` — failed: `OperationNotAllowed: Operations are not allowed when the
+  managed cluster is not in the Running power state`. `az aks show` confirmed
+  `powerState.code: Stopped`. This is almost certainly the same root cause that broke the Portal
+  wizard (Azure likely silently refuses/reverts config writes against a stopped cluster's
+  monitoring blade rather than surfacing a clear error in that UI).
+- Asked the user whether to start the cluster to unblock this; **user chose to leave it stopped**
+  and enable monitoring later instead.
+
+### Outstanding
+- Container Insights is NOT yet enabled on `kendra-kendralabs-aks`. The workspace
+  (`kendra-kendralabs-aks-law`) is provisioned and ready — next time the cluster is started for
+  any reason, run the `enable-addons` command above to finish this.
+- `kendra-dev-aks` was never started, stopped, or otherwise modified — still 0 monitored
+  clusters there, untouched per scope.
+- Worth a memory/runbook note: when the Azure Portal's Monitor Settings wizard misbehaves
+  (reverting field values, "(New)" workspace options that vanish), check the target
+  cluster/resource's power state first — Azure CLI gives a much clearer error than the Portal
+  does in this case.
