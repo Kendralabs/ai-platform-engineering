@@ -1,5 +1,16 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-06)
+
+**Blocked, waiting on Azure support.** `~/Software/infra` (separate repo) `envs/azure/dev`
+`tofu apply` migration from `uksouth` → `westeurope` is paused mid-flight: `westeurope` is
+rejecting VNet/Key Vault/user-assigned identity/Log Analytics Workspace creation for this
+subscription with `RequestDisallowedByAzure: region is currently not accepting new customers`,
+even though RG/budget/DNS zone/role-assignment succeeded in the same region. Support ticket
+drafted (not yet confirmed submitted) with subscription ID and both failed regions' errors. See
+Session 6 below for full detail. Do not run further `tofu apply` in that repo until region
+eligibility is confirmed.
+
 ## Status Snapshot (2026-11-01)
 
 Production VPS (`infra.kendralabs.com` / `srv1892964.hstgr.cloud`, `/opt/caipe`) Azure Cluster Ops
@@ -115,3 +126,181 @@ Traced the gap down to two things, both resolved:
   repos/Kendralabs/ai-platform-engineering/keys` returns no registered deploy keys — already
   clear. VPS side: deleted the closest-matching local key pair, `~/.ssh/kendra_ci_deploy_ed25519`
   (+ `.pub`), with explicit confirmation.
+
+## Session 3: Neo4j Aura → VPS Migration (2026-11-02)
+
+### Summary
+Migrated the `kendra-kiam` Neo4j Aura instance (project "Kendra Labs", ID `8ce64c3e`) off Aura
+and onto a new dedicated `kcg-prod-neo4j` container on the production VPS, to stop Aura billing.
+KCG app's `.env` was updated and the `kcg` service restarted (by someone with root/`kcg-deploy`
+write access); end-to-end UI verification at `https://nexus.kendralabs.com` confirms it's fully
+working against the new backend.
+
+### What was done
+- Created a temporary Aura user `migrator` (role `architect`) via the Aura Query console, since
+  there is no real "recover credentials" flow — Aura's docs call this "create a new user" instead.
+- Exported all data from Aura over Bolt (`neo4j+s://8ce64c3e.databases.neo4j.io`) using
+  `elementId()` as a correlation key, and imported into `kcg-prod-neo4j` (already running on the
+  VPS, Bolt on `127.0.0.1:7689`) via APOC's `apoc.create.node`/`apoc.create.relationship`, over an
+  SSH tunnel. Verified counts and label distributions match exactly: 16,771 nodes, 308
+  relationships.
+- Paused the `kendra-kiam` Aura instance (RUNNING $0.36/hr → PAUSED $0.072/hr).
+- Deleted the plaintext `/tmp/kcg-prod-neo4j-creds.txt` on the VPS.
+- `/opt/kcg/.env` updated (`NEO4J_URI=bolt://kcg-prod-neo4j:7687`, `NEO4J_USER=neo4j`,
+  `NEO4J_PASSWORD=<see kcg-prod-neo4j container env>`) and the `kcg` compose service
+  force-recreated (`docker compose -p kcg -f docker-compose.yml -f docker-compose.prod.yml up -d
+  --force-recreate kcg`). Logs confirmed clean startup against `bolt://kcg-prod-neo4j:7687`.
+- Found and fixed a follow-on issue: `kcg-backend`'s container IP changed on recreate
+  (`10.89.0.8` → `10.89.0.13` on the `kcg_default` network), but `kcg-dashboard`'s nginx had the
+  old IP cached, causing `/api/auth/login` and other `/api/*` calls to fail with 502 ("Host is
+  unreachable"). Fixed with `docker restart kcg-dashboard` to force nginx to re-resolve.
+- Verified end-to-end in the browser at `https://nexus.kendralabs.com`: login works, dashboard
+  shows "KCG connected" with real metrics (1000 nodes, 191 edges, eval metrics populated), and the
+  Graph explorer renders real migrated data (Decision: 992, Agent: 7 nodes).
+
+### Outstanding
+- The Aura `migrator` user (role `architect`) was **not** dropped — decided to leave it dormant
+  while the instance is paused (no one can authenticate to a paused instance) rather than pay for
+  a resume/drop/re-pause cycle. Drop it next time the instance is resumed for any reason, or before
+  final decommission.
+- Aura instance is paused, not deleted — final disposition (stay paused vs. delete) still pending
+  user's planned move to another host (e.g. Azure).
+- Worth a follow-up note/runbook entry: any future `kcg` service recreate needs a `kcg-dashboard`
+  nginx restart too, since its upstream IP isn't re-resolved automatically.
+
+## Session 4: Azure Cluster Ops Agent → NVIDIA NIM LLM Backend (2026-11-03)
+
+### Summary
+Switched the Azure Cluster Ops Agent's LLM backend on the production VPS from the slow
+self-hosted Gemma/llama.cpp setup to NVIDIA NIM (`https://integrate.api.nvidia.com/v1`,
+model `nvidia/nemotron-3-ultra-550b-a55b`), via the OpenAI-compatible `openai` provider path —
+no code changes needed, pure config.
+
+### What was done
+- Registered the new model in the Kendra Infra admin UI's LLM Models tab
+  (`nvidia/nemotron-3-ultra-550b-a55b` / "Nemotron 3 Ultra (NVIDIA NIM)" / provider `openai`).
+- Attempted to store the NVIDIA API key via the UI's "Connect provider" flow — failed with
+  "Credential features are disabled." Root cause: `CAIPE_CREDENTIALS_ENABLED` is unset on this
+  VPS and there is no OpenBao service deployed at all (not a bug — that subsystem was never
+  turned on here).
+- Per explicit user decision, bypassed the credential store as a temporary exception and put the
+  key directly in `/opt/caipe/.env` as `OPENAI_API_KEY` (`OPENAI_ENDPOINT` was already pointed at
+  NVIDIA NIM from earlier in this session).
+- Updated `caipe.dynamic_agents` doc `_id: "agent-azure-cluster-ops-agent"` via `mongosh`:
+  `model.id` → `nvidia/nemotron-3-ultra-550b-a55b`, `model.provider` stays `openai`.
+- Hit a 401 (`Invalid JWT serialization`) on first retest — root-caused to a stale/unrelated key
+  (`sk-kcg...`) left in `OPENAI_API_KEY`, not the NVIDIA key. User corrected the value; confirmed
+  by shape only (`nvapi-...`, 70 chars) without ever printing the secret.
+- Recreated `dynamic-agents` (`docker compose up -d --no-deps dynamic-agents`); verified clean
+  startup.
+
+### Verified
+End-to-end chat test in the UI: Azure Cluster Ops Agent's `self_identity` tool confirms
+`model_id: nvidia/nemotron-3-ultra-550b-a55b`, `model_provider: openai`, and the agent replies
+correctly identifying itself as running on NVIDIA Nemotron 3 Ultra. No 401, no network error.
+
+### Outstanding
+- This is a VPS-local config change only (`.env`, MongoDB) — not tracked in git, no PR.
+- The NVIDIA API key living in `/opt/caipe/.env` is an explicit, scoped exception to the
+  OpenBao/KIAM-secrets rule, made only because the credential-store subsystem isn't deployed on
+  this host — revisit if/when that subsystem is brought up here.
+- Not yet extended to the other Azure agents (Power Ops, Core Services, Cost Ops) — not
+  requested by the user.
+
+### Update: extended to all Azure agents (2026-11-03, same day)
+User asked to switch all agents to the NVIDIA model. Updated `caipe.dynamic_agents` for
+`agent-azure-power-ops-agent`, `agent-azure-cost-ops-agent`, and
+`agent-azure-core-services-ops-agent` (Cost Ops and Core Services also had the known invalid
+`"google-genai-self-hosted-llamacpp "` provider string — fixed as part of this change) to
+`model.id: nvidia/nemotron-3-ultra-550b-a55b`, `model.provider: openai`, matching Cluster Ops.
+Recreated `dynamic-agents`; clean startup, no `Unsupported provider` errors. All 4 real Azure
+agents (`hello-world` has no model configured and was left alone) now confirmed via `mongosh`
+pointing at the NVIDIA model. Live UI chat re-verification for Power Ops/Cost Ops/Core Services
+not yet done (Chrome extension disconnected mid-session) — config + clean container startup are
+the current evidence.
+
+## Session 5: Azure Service Principal for MCP Agents (2026-11-03)
+
+### Summary
+Discovered the `mcp-azure-*` containers (power-ops, cost-ops, cluster-ops, core-services-ops)
+were running on the VPS with no real Azure subscription credentials — only
+`AZURE_OPENAI_*` vars (an LLM endpoint, unrelated) existed in `/opt/caipe/.env`. Created a real
+Azure AD service principal so these agents can actually operate against Azure resources, not
+just respond with app-level placeholder messages.
+
+### What was done
+- Confirmed local `az` CLI already authenticated as the user against subscription
+  "Kendra Platform" (`c53f4750-141e-4653-b484-0ca2774bca63`).
+- Per explicit user choice (Contributor role, whole-subscription scope), created
+  `az ad sp create-for-rbac --name caipe-azure-mcp-agents --role Contributor --scopes
+  /subscriptions/c53f4750-141e-4653-b484-0ca2774bca63` — output redirected straight to a local
+  scratchpad file, never printed to the transcript.
+- Wrote `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` to a
+  local snippet file, `scp`'d it to the VPS `/tmp`, then (separate approved step)
+  `cat >> /opt/caipe/.env` and removed the temp file — same scoped
+  no-OpenBao-deployed exception as the NVIDIA key, with the secret value never appearing in chat.
+  Deleted the local scratchpad SP/snippet files afterward.
+- Recreated all 4 `mcp-azure-*` containers (`docker compose up -d --no-deps ...`); confirmed
+  clean FastMCP startup logs for all four, no auth errors.
+
+### Outstanding
+- VPS-local `.env` change + a live Azure AD/subscription resource (service principal +
+  Contributor role assignment) — not tracked in git, no PR.
+- Not yet verified end-to-end that the agents can actually list/manage real Azure resources with
+  the new SP (only confirmed clean container startup so far) — next step is a live chat test per
+  agent once the Chrome extension reconnects.
+- Contributor at subscription scope is broad — revisit narrowing to specific resource groups
+  once real usage patterns are known, per the user's own call at setup time.
+- The SP secret has no expiry override applied (uses Azure AD's default, currently 1 year) —
+  note for future rotation.
+
+## Session 6: Azure `dev` Region Migration (uksouth → westeurope), blocked (2026-11-06)
+
+### Context
+Separate repo: `~/Software/infra` (OpenTofu), `envs/azure/dev`. Per explicit user instruction,
+executed a real `tofu apply` for this environment (previously held off pending approval).
+
+### What was done
+- Fixed `AvailabilityZoneNotSupported`: `availability_zones` variable wasn't passed through from
+  `envs/azure/dev`/`customer-template` down to `modules/azure/compute` — added the variable +
+  wiring to both envs.
+- Hit a deeper blocker: `uksouth` has **zero VM compute SKUs available at all** for this
+  subscription (`az vm list-skus --location uksouth --resource-type virtualMachines` returns
+  nothing usable) — not a zone or size issue, a full compute-quota absence. PaaS resources
+  (Postgres, Key Vault, VNet) deployed fine there; AKS never could.
+- Escalated to user via AskUserQuestion (destroy/recreate of already-provisioned uksouth
+  resources was the cost of switching) — user chose **westeurope**.
+- Changed `azure_region` to `westeurope` in `dev/terraform.tfvars`, reverted the
+  `availability_zones = []` override (westeurope fully supports AZs).
+- Ran the destroy+recreate apply. Hit a second blocker mid-migration: Resource Group deletion
+  failed because `azurerm_private_dns_zone.postgres` (global resource, no `location` attribute)
+  wasn't included in the destroy plan — root-caused and fixed with
+  `-replace=module.storage.azurerm_private_dns_zone.postgres` alongside the RG replacement.
+- Re-ran the apply: RG, budget, DNS zone, and the infra-admins role assignment were created
+  successfully in `westeurope`. Then hit the **current blocker**: VNet, NSG, Key Vault,
+  user-assigned identity, and Log Analytics Workspace were all rejected with
+  `RequestDisallowedByAzure: The selected region is currently not accepting new customers` —
+  a subscription-eligibility restriction, not a capacity/SKU issue, and not queryable via `az` CLI.
+- Escalated again rather than guessing a third region (two consecutive region failures already
+  incurred real destroy/recreate cost) — user chose to pause and open an Azure support ticket.
+  Drafted the ticket text (subscription ID, both failed regions, affected resource types, error
+  strings) for the user to submit via the Portal.
+
+### Current live Azure state (envs/azure/dev, `kendra-dev-rg` in `westeurope`)
+- Exists: Resource Group, Consumption Budget, Private DNS Zone
+  (`privatelink.postgres.database.azure.com`), Contributor role assignment (infra admins).
+- Does NOT yet exist: VNet, NSG, Key Vault, user-assigned identity, Log Analytics Workspace,
+  AKS cluster, dashboard, Postgres server, federated identity credential, workload key vault
+  access policy — these are what the next `tofu apply` needs to create once a working region is
+  confirmed.
+
+### Outstanding
+- Waiting on user to submit the drafted support ticket and report back which region(s) this
+  subscription is eligible for.
+- Once confirmed: update `azure_region` in `dev/terraform.tfvars` again if westeurope isn't
+  viable, `tofu plan`/`apply` (same `-exclude` flags for the 3 diagnostic-setting resources, plus
+  `-replace` on the DNS zone again only if migrating regions a second time), then run the second
+  plain `tofu apply` (no excludes) to converge diagnostics per
+  `docs/runbooks/azure-platform/07-observability.md`.
+- Consider whether `customer-template`'s own default region has the same subscription-eligibility
+  gap — not yet checked, only relevant if/when a new customer env is provisioned from it.
