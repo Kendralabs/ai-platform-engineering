@@ -296,6 +296,18 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_POWER_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_POWER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_POWER_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_power_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_POWER_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_POWER_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_POWER_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_POWER_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_POWER_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_POWER_OPS_ARM_CLIENT_SECRET_REF:-azure-power-ops/arm-client-secret}
     healthcheck:
       # CMD-SHELL (single string): the exec-array form was getting
       # re-split on whitespace by the compose tooling on this host.
@@ -332,6 +344,18 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_COST_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_COST_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_COST_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_cost_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_COST_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_COST_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_COST_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_COST_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_COST_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_COST_OPS_ARM_CLIENT_SECRET_REF:-azure-cost-ops/arm-client-secret}
     healthcheck:
       # CMD-SHELL (single string): the exec-array form was getting
       # re-split on whitespace by the compose tooling on this host.
@@ -368,6 +392,18 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_CLUSTER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CLUSTER_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_cluster_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_CLUSTER_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_CLUSTER_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_CLUSTER_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_CLUSTER_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_CLUSTER_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET_REF:-azure-cluster-ops/arm-client-secret}
     healthcheck:
       # CMD-SHELL (single string): the exec-array form was getting
       # re-split on whitespace by the compose tooling on this host.
@@ -405,6 +441,18 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_CORE_SERVICES_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_CORE_SERVICES_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CORE_SERVICES_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_core_services_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_CORE_SERVICES_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_CORE_SERVICES_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_CORE_SERVICES_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_CORE_SERVICES_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_CORE_SERVICES_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_CORE_SERVICES_OPS_ARM_CLIENT_SECRET_REF:-azure-core-services-ops/arm-client-secret}
     healthcheck:
       # CMD-SHELL (single string): the exec-array form was getting
       # re-split on whitespace by the compose tooling on this host.
@@ -448,6 +496,30 @@ services:
     profiles:
       - caipe-mongodb
       - autonomous-agents
+
+  # OpenBao — credential-exchange secrets backend (requires --profile credentials)
+  openbao:
+    image: ghcr.io/openbao/openbao:2.1
+    container_name: openbao
+    ports:
+      - "${OPENBAO_HOST_PORT:-8200}:8200"
+    environment:
+      # Dev-mode server: in-memory storage, auto-unseal, fixed root token.
+      # Local/dev only — never use -dev mode against a real deployment.
+      - BAO_DEV_ROOT_TOKEN_ID=${OPENBAO_TOKEN:-caipe-dev-root-token}
+      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    command: ["server", "-dev"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8200/v1/sys/health?standbyok=true"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - credentials
 
   # MongoDB Admin UI (optional)
   caipe-ui-mongo-express:
@@ -566,7 +638,11 @@ services:
       # Connections & Secrets. Docker Compose reads provider bootstrap values
       # from .env; Kubernetes deployments use ESO to inject the same env names.
       - CAIPE_CREDENTIALS_ENABLED=${CAIPE_CREDENTIALS_ENABLED:-false}
-      - CREDENTIAL_STORE_BACKEND=${CREDENTIAL_STORE_BACKEND:-mongodb-envelope}
+      - CREDENTIAL_STORE_BACKEND=${CREDENTIAL_STORE_BACKEND:-openbao}
+      - OPENBAO_ADDR=${OPENBAO_ADDR:-http://openbao:8200}
+      - OPENBAO_TOKEN=${OPENBAO_TOKEN:-caipe-dev-root-token}
+      - OPENBAO_KV_MOUNT=${OPENBAO_KV_MOUNT:-secret}
+      - OPENBAO_CREDENTIALS_PATH_PREFIX=${OPENBAO_CREDENTIALS_PATH_PREFIX:-caipe/credentials}
       - CREDENTIAL_KEY_PROVIDER=${CREDENTIAL_KEY_PROVIDER:-local-cmk}
       - CREDENTIAL_KMS_CMK_ID=${CREDENTIAL_KMS_CMK_ID:-}
       - CREDENTIAL_KMS_REGION=${CREDENTIAL_KMS_REGION:-}
@@ -599,6 +675,9 @@ services:
     command: /app/entrypoint.sh
     depends_on:
       audit-service:
+        condition: service_healthy
+        required: false
+      openbao:
         condition: service_healthy
         required: false
     restart: unless-stopped
