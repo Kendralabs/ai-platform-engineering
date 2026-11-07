@@ -1,5 +1,21 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-07, secret_ref human-readable id follow-up)
+
+Fixed the gap flagged in the provisioning runbook: `POST /api/credentials/secrets`
+previously always minted a random UUID (`secret-service-factory.ts`'s
+`idGenerator: randomUUID`), so a human provisioning `ARM_CLIENT_SECRET_REF` for an
+Azure MCP agent had no way to get a predictable id without reading back a UUID
+and overriding the default. Added an optional `id` field to `CreateSecretInput`
+(`ui/src/lib/credentials/secret-service.ts`), validated against the existing
+`SECRET_ID_PATTERN` and checked for collision (409 `CREDENTIAL_ID_CONFLICT`);
+wired through the `POST /api/credentials/secrets` route
+(`ui/src/app/api/credentials/secrets/route.ts`). Omitting `id` still gives a
+generated UUID, so this is additive. Updated the
+`azure-power-ops-provisioning-runbook.md` to use the human-readable ref
+directly. Jest (`secret-service.test.ts`, route test) and eslint both pass.
+Committed as `858f17e0c`. Not pushed yet.
+
 ## Status Snapshot (2026-11-07, OpenBao credential-exchange cutover)
 
 **All four Azure MCP agents wired to OpenBao credential-exchange, opt-in; committed locally, not
