@@ -114,6 +114,14 @@ export interface CreateSecretInput {
   type: CredentialSecretType;
   plaintext: string;
   description?: string;
+  /**
+   * Caller-chosen secret_ref id (e.g. "azure-cluster-ops/arm-client-secret"),
+   * for agents that need a predictable, human-readable reference to put in
+   * their own config (ARM_CLIENT_SECRET_REF and similar). Must match
+   * SECRET_ID_PATTERN and not collide with an existing secret. Omit to get
+   * a generated id.
+   */
+  id?: string;
 }
 
 export interface BootstrapSecretInput {
@@ -268,7 +276,7 @@ export class SecretService {
   async createSecret(input: CreateSecretInput): Promise<SecretMetadata> {
     const name = requireNonEmptyString(input.name, "name");
     const plaintext = requireNonEmptyString(input.plaintext, "plaintext");
-    const id = this.idGenerator();
+    const id = await this.resolveNewSecretId(input.id);
     const now = this.now();
     const maskedPreview = maskCredentialValue(plaintext);
 
@@ -549,6 +557,21 @@ export class SecretService {
     await this.payloadStore.deleteSecret?.(input.secretId);
     await this.deleteAllRelationships(input.secretId);
     await this.secretRefsCollection.deleteOne({ id: input.secretId });
+  }
+
+  private async resolveNewSecretId(requestedId: string | undefined): Promise<string> {
+    const trimmed = requestedId?.trim();
+    if (!trimmed) {
+      return this.idGenerator();
+    }
+    if (!SECRET_ID_PATTERN.test(trimmed)) {
+      throw new ApiError("id is not a valid secret reference identifier", 400, "VALIDATION_ERROR");
+    }
+    const existing = await this.secretRefsCollection.findOne({ id: trimmed });
+    if (existing) {
+      throw new ApiError("A secret with this id already exists", 409, "CREDENTIAL_ID_CONFLICT");
+    }
+    return trimmed;
   }
 
   private async getSecretRef(secretId: string): Promise<SecretRefDocument> {

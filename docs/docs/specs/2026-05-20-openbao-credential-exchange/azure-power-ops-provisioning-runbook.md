@@ -5,18 +5,14 @@ client secret, a minted Keycloak client secret) into a live system. Never run
 these steps through an agent — see `openbao-direct-implementation-plan.md`
 Phase 4 step 5 and the project's KIAM/OpenBao-not-`.env` rule.
 
-**Prerequisite gap found while writing this runbook**: `POST
-/api/credentials/secrets` always generates a random UUID as the secret's id
-(`ui/src/lib/credentials/secret-service-factory.ts:123`, `idGenerator:
-randomUUID`) — there is no way to create a secret with a chosen human-readable
-id like `azure-power-ops/arm-client-secret`. That path only exists today as
-`credential_client.py`'s *default* for `ARM_CLIENT_SECRET_REF`
-(`ai_platform_engineering/mcp/azure_power_ops/tools/credential_client.py`).
-So step 3 below creates the secret, reads back the generated UUID, and you
-must set `ARM_CLIENT_SECRET_REF` to that UUID — not the human-readable
-default — in step 5. (If you'd rather fix this properly, add an optional
-`id` field to `CreateSecretInput` end-to-end and skip straight to a
-human-readable ref; that's a small follow-up, not done here.)
+`POST /api/credentials/secrets` accepts an optional `id` field — pass the
+human-readable id you want (e.g. `azure-power-ops/arm-client-secret`,
+matching `credential_client.py`'s default `ARM_CLIENT_SECRET_REF`) and it's
+used verbatim instead of a generated UUID, as long as it matches
+`SECRET_ID_PATTERN` and isn't already taken (409 `CREDENTIAL_ID_CONFLICT` if
+so). Omit `id` to get a generated UUID as before. Step 2 below uses this, so
+you can skip straight to the human-readable ref in step 5 instead of reading
+back a UUID.
 
 ## 1. Create the Keycloak service-account client
 
@@ -51,6 +47,7 @@ in step 4):
 ```
 POST /api/credentials/secrets
 {
+  "id": "azure-power-ops/arm-client-secret",
   "name": "azure-power-ops-arm-client-secret",
   "type": "service",
   "plaintext": "<the real Azure SP client secret — from Azure, never typed by an agent>",
@@ -61,8 +58,10 @@ POST /api/credentials/secrets
 This writes the secret material into OpenBao (via `openbao-store.ts`,
 transparently — nothing OpenBao-specific to configure here beyond the
 `openbao` Compose service already being up) and a `secret_refs` metadata doc
-into Mongo. **Copy the returned `id` (a UUID)** — that's your real
-`secret_ref` value for everything below.
+into Mongo. The returned `id` is exactly what you passed —
+`azure-power-ops/arm-client-secret` — that's your `secret_ref` value for
+everything below (and already matches `credential_client.py`'s default, so
+step 5 can leave `ARM_CLIENT_SECRET_REF` unset).
 
 ## 3. Grant the service account `use` on that secret
 
@@ -77,15 +76,16 @@ POST /api/admin/openfga/tuples
     {
       "user": "service_account:<sa_sub from step 1>",
       "relation": "can_use",
-      "object": "secret_ref:<uuid from step 2>"
+      "object": "secret_ref:azure-power-ops/arm-client-secret"
     }
   ],
   "deletes": []
 }
 ```
 
-Verify with `GET /api/admin/openfga/tuples?object=secret_ref:<uuid>` — you
-should see the tuple you just wrote.
+Verify with
+`GET /api/admin/openfga/tuples?object=secret_ref:azure-power-ops/arm-client-secret`
+— you should see the tuple you just wrote.
 
 ## 4. Find your Keycloak token URL
 
@@ -108,7 +108,7 @@ CAIPE_CREDENTIAL_API_URL=<BFF base URL>/api/credentials
 KEYCLOAK_TOKEN_URL=<from step 4>
 CAIPE_SERVICE_ACCOUNT_CLIENT_ID=<client_id from step 1>
 CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=<client_secret from step 1>
-ARM_CLIENT_SECRET_REF=<uuid from step 2>       # overrides the human-readable default
+ARM_CLIENT_SECRET_REF=azure-power-ops/arm-client-secret   # matches the default; can be left unset
 ```
 
 Leave `ARM_CLIENT_ID` / `ARM_TENANT_ID` / `ARM_SUBSCRIPTION_ID` as plain env
