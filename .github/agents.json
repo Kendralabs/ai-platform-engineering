@@ -1,7 +1,7 @@
 {
   "_comment": "Central configuration for agent lists used by CI/CD workflows",
   "_assisted_by": "assisted-by Codex Codex-sonnet-4-6",
-  "_mcp_build_args_comment": "Per-agent opt-in build args for build/agents/Dockerfile.mcp. Valid keys: INSTALL_NETUTILS, INSTALL_AWS_CLI, INSTALL_KUBECTL. Add an entry only when the MCP agent genuinely invokes the tool at runtime.",
+  "_mcp_build_args_comment": "Per-agent opt-in build args for build/agents/Dockerfile.mcp. Valid keys: INSTALL_NETUTILS, INSTALL_AWS_CLI, INSTALL_KUBECTL, INSTALL_AZ_CLI. Add an entry only when the MCP agent genuinely invokes the tool at runtime.",
   "mcp_build_args": {
     "aws": {
       "INSTALL_AWS_CLI": "true",
@@ -9,6 +9,18 @@
     },
     "netutils": {
       "INSTALL_NETUTILS": "true"
+    },
+    "azure_power_ops": {
+      "INSTALL_AZ_CLI": "true"
+    },
+    "azure_cost_ops": {
+      "INSTALL_AZ_CLI": "true"
+    },
+    "azure_cluster_ops": {
+      "INSTALL_AZ_CLI": "true"
+    },
+    "azure_core_services_ops": {
+      "INSTALL_AZ_CLI": "true"
     }
   },
   "mcp_agents": [
