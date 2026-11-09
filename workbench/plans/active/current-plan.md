@@ -1,5 +1,25 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-09, OpenBao credential-store backend swap committed+pushed)
+
+**UI credential store swapped from client-side Mongo envelope encryption to OpenBao KV v2,
+behind the existing `PayloadStore` interface; committed and pushed.** `~/Software/caipe`, branch
+`prebuild/feat/infra-ops-mcp`. Added `ui/src/lib/credentials/openbao-store.ts`
+(`OpenBaoCredentialStore`, duck-typed to match `MongoEnvelopeCredentialStore`) and
+`payload-store-factory.ts` (picks backend via `CredentialStoreBackend` feature flag, default
+flipped to `openbao`); trimmed `retrieval-service-factory.ts`/`secret-service-factory.ts` to use
+the shared factory instead of constructing stores inline. Closed the gap the implementation-plan
+doc flagged — no unit tests existed for `openbao-store.ts` — with a new test file covering
+write/read/rotate/delete, not-found, missing-preview, sealed/unavailable fail-closed (both a 503
+response and a thrown network error), and custom mount/path-prefix URL building; 8/8 passing.
+Also folded in `.github/agents.json` + `build/agents/Dockerfile.mcp` opt-in `az` CLI install for
+the four Azure MCP agent images (separate from the already-committed `credential_client.py` REST
+credential-exchange wiring). Full credentials Jest suite: 30 suites / 168 tests passing; `npx
+eslint` clean on all touched files; `npm run build` succeeds. Committed `549a3b345`. Scratch/debug
+files sitting in the working tree (`ONBOARDING.md`, `test-login.mjs`, `test_llm.py`,
+`start-caipe.sh`, `fake-bin/`, `woodpecker-ci-onboarding-for-projects.md`, `docs/models/`) were
+deliberately left untouched per explicit choice — not part of this change.
+
 ## Status Snapshot (2026-11-09, Azure AD guest cleanup + break-glass admin)
 
 **Confused B2B guest account deleted; break-glass GA account provisioned; Owner/AKS-admin access
@@ -499,6 +519,47 @@ Container Insights for `kendra-kendralabs-aks` only, explicitly not `kendra-dev-
   (reverting field values, "(New)" workspace options that vanish), check the target
   cluster/resource's power state first — Azure CLI gives a much clearer error than the Portal
   does in this case.
+
+## Session: OpenBao Credential-Store Backend Swap, Finished + Pushed (2026-11-09)
+
+### Summary
+Finished and committed the uncommitted OpenBao credential-store work that had been sitting in
+`~/Software/caipe`'s working tree, per explicit user choice ("Review and finish it").
+
+### What was done
+- Reviewed the existing uncommitted diff/new files: `OpenBaoCredentialStore`
+  (`ui/src/lib/credentials/openbao-store.ts`), `payload-store-factory.ts`,
+  trimmed `retrieval-service-factory.ts`/`secret-service-factory.ts`, the
+  `CredentialStoreBackend` feature-flag change (default `mongodb-envelope` → `openbao`),
+  `ui/env.example` OpenBao vars, and `.github/agents.json` +
+  `build/agents/Dockerfile.mcp` opt-in `az` CLI install for the Azure MCP agent images.
+- Confirmed this swaps the backend behind the already-shipped `PayloadStore` interface
+  (no duplicate work vs. the earlier Mongo-envelope store), and that `rotateSecret`'s
+  read-then-rewrite-unchanged semantics match the existing Mongo-envelope store's behavior.
+- The implementation-plan doc
+  (`docs/docs/specs/2026-05-20-openbao-credential-exchange/openbao-direct-implementation-plan.md`)
+  itself flagged missing unit tests for `openbao-store.ts` — wrote
+  `ui/src/lib/credentials/__tests__/openbao-store.test.ts` (modeled on
+  `mongo-envelope-store.test.ts`'s style) covering write/read/rotate/delete, not-found,
+  missing-preview, sealed/unavailable fail-closed (503 response and thrown network error),
+  and custom mount/path-prefix URL construction. Used a hand-rolled `FakeResponse` test
+  double instead of the real `Response` global — jsdom (this repo's Jest environment)
+  doesn't provide one, so constructing `new Response(...)` directly threw `ReferenceError`
+  inside every test until swapped.
+- Verified: 8/8 new tests pass; full `src/lib/credentials` + `src/app/api/credentials` Jest
+  suite now 30 suites / 168 tests passing (up from 29/160 pre-existing); `npx eslint` clean
+  on every touched file; `npm run build` succeeds.
+- Left the unrelated scratch/debug files in the working tree untouched per explicit user
+  choice ("Leave them"): `ONBOARDING.md`, `test-login.mjs`, `test_llm.py`, `start-caipe.sh`,
+  `fake-bin/`, `woodpecker-ci-onboarding-for-projects.md`, `docs/models/`.
+- Staged only the OpenBao-related files and committed as `549a3b345`
+  (`feat(credentials): swap credential store backend to OpenBao`), then pushed to
+  `kendralabs prebuild/feat/infra-ops-mcp`.
+
+### Outstanding
+- None for this change. Broader open items (GitHub/OpenBao access provisioning for Azure
+  accounts, "other Azure AD tenant" question, Postgres Flexible Server, Container Insights)
+  remain as previously tracked, unrelated to this session.
 
 ## Session: Azure AD Guest Cleanup + Break-Glass Admin (2026-11-08/09)
 
