@@ -1,5 +1,13 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-09, Azure AD guest cleanup + break-glass admin)
+
+**Confused B2B guest account deleted; break-glass GA account provisioned; Owner/AKS-admin access
+granted to both native and break-glass accounts.** Tenant `alpeshdoshikendralabs.onmicrosoft.com`
+(`kendralabs.com`), subscription "Kendra Platform" (`c53f4750-141e-4653-b484-0ca2774bca63`). Not a
+`caipe` repo change — no commit/push; recorded here per the standing plan-update rule. Full detail
+in the Work Log below (Session: Azure AD Guest Cleanup).
+
 ## Status Snapshot (2026-11-07, secret_ref human-readable id follow-up)
 
 Fixed the gap flagged in the provisioning runbook: `POST /api/credentials/secrets`
@@ -491,6 +499,47 @@ Container Insights for `kendra-kendralabs-aks` only, explicitly not `kendra-dev-
   (reverting field values, "(New)" workspace options that vanish), check the target
   cluster/resource's power state first — Azure CLI gives a much clearer error than the Portal
   does in this case.
+
+## Session: Azure AD Guest Cleanup + Break-Glass Admin (2026-11-08/09)
+
+### Summary
+Resolved a long-standing Azure AD identity confusion: a self-invited B2B guest account had
+Global Administrator and was linked as "self" to the user's native work account (and even their
+personal MSA), so Azure AD's self-removal/self-deletion protection blocked removing the role or
+deleting the account from any of those sessions. Resolved by creating a separate break-glass GA
+account and using it to delete the guest outright, then re-provisioned subscription/AKS access so
+both the native and break-glass accounts can fully manage the infrastructure.
+
+### What was done
+- Diagnosed the self-linkage via Graph API (`/directoryRoles`, `/directoryRoles/{id}/members`,
+  `/users/{id}`): both role-removal and account-deletion calls failed with
+  `"User cannot remove self from TenantAdmins role"` / `"principal performing this request cannot
+  delete itself"` regardless of which of the three identities (native, guest, personal MSA) made
+  the call.
+- Created a new break-glass Global Administrator account, `a@kendralabs.com` (user-created by
+  hand). Signed in as it and successfully deleted the guest user object (confirmed via follow-up
+  GET → 404).
+- Discovered Entra ID roles don't grant Azure RBAC permissions automatically
+  (`AuthorizationFailed` on ARM calls from the pure-GA break-glass account). Used the
+  `elevateAccess` API to grant the break-glass account **User Access Administrator** at tenant
+  root scope `/` (not "Owner" — corrected an earlier inaccurate description to the user).
+- Cleaned up two stale/orphaned subscription-scope "Owner" role assignments that referenced the
+  deleted guest's object id.
+- Granted **Owner** at subscription scope (`c53f4750-141e-4653-b484-0ca2774bca63`) to both the
+  native and break-glass accounts.
+- Granted **Azure Kubernetes Service RBAC Cluster Admin** on both AKS clusters
+  (`kendra-dev-aks`, `kendra-kendralabs-aks`) to both accounts.
+- Per user's explicit choice, left the break-glass account's broader root-scope "User Access
+  Administrator" grant in place as extra break-glass headroom, even though it exceeds the
+  originally-scoped subscription-level request.
+
+### Outstanding
+- GitHub org/repo access and OpenBao/KIAM secrets access for these accounts — explicitly deferred
+  by the user ("skip both for now"); pick up only if asked again.
+- User's question about "the other Azure AD tenant" — only one tenant
+  (`6c1da3bf-a9e2-4e70-910d-f37ccb5e9497`) was found accessible; no second tenant was ever
+  identified. Open if the user raises it again.
+- Live Azure AD/subscription state only — not tracked in git, no PR, no commit.
 
 ## Session: Node-pool split on `kendra-kendralabs-aks` (2026-11-07)
 
