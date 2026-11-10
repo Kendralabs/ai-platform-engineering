@@ -1,5 +1,20 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-10, spend-report design doc written; cnoe-io remote removed)
+
+Wrote `docs/runbooks/azure-platform/09-daily-spend-report.md` (`~/Software/infra`), comparing a
+Logic App (Recurrence trigger + Cost Management Query API + email) against an Automation Account
+runbook for the requested daily spend-breakdown email to `a@kendralabs.com` at 7am UK time.
+Recommends the Logic App for this scope. Nothing deployed — open items before it becomes a real
+Terraform change: breakdown grouping (resource group vs. service), email delivery mechanism (O365
+connector vs. SendGrid), which subscription(s), and IaC placement in `envs/azure/<env>`. Committed
+`0d51e9e`, pushed to `Kendralabs/kendrainfra` main.
+
+Also: user asked to never push to `cnoe-io/ai-platform-engineering` and to remove that remote —
+removed `origin` (cnoe-io) from `~/Software/caipe`'s git remotes; only `kendralabs` remains. Checked
+`~/Software/infra` and `~/Software/kiam` too — both already pointed only at Kendralabs, nothing to
+remove there. See [[feedback_no_cnoe_io_prs]].
+
 ## Status Snapshot (2026-11-10, azure.md doc updated for Neo4j; spend-report alert not started)
 
 `docs/components/kiam/azure.md` (`~/Software/infra`) now documents the Neo4j provisioning step:
