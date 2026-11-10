@@ -1,5 +1,22 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-10, azure.md doc updated for Neo4j; spend-report alert not started)
+
+`docs/components/kiam/azure.md` (`~/Software/infra`) now documents the Neo4j provisioning step:
+inserted section 3 (`argocd app sync core-neo4j`, before `core-kiam`), renumbered the rest (4-7),
+and added `neo4j-auth`/`neo4j-password` to the Key Vault secret-creation block in what's now
+section 5. Committed `83d481c`, pushed to `Kendralabs/kendrainfra` main. This closes the third
+"Outstanding" item from the 2026-11-10 Neo4j snapshot below — the other two (Key Vault secret
+values, ArgoCD sync) are still open.
+
+**New, separate request**: user asked for a daily Azure spend report (with a breakdown of where
+spend occurred) emailed to `a@kendralabs.com` at 7am UK time every day. Not started — Azure has no
+single native "recurring cost-breakdown email" feature, so this needs a mechanism decision (Logic
+App + Recurrence trigger + Cost Management Query API + email action, vs. an Azure Automation
+runbook, vs. Cost Management's scheduled export + a separate emailing step) before building
+anything. Creating this means real costed Azure infrastructure (a Logic App or Automation Account)
+plus an email-sending action — needs explicit user confirmation before deploying.
+
 ## Status Snapshot (2026-11-10, in-cluster Neo4j for KIAM: committed+pushed)
 
 **`kiam-backend`'s crash on missing `NEO4J_*`/`DATABASE_URL` env vars fixed: real, cloud-agnostic
