@@ -1,5 +1,38 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-10, in-cluster Neo4j for KIAM: committed+pushed)
+
+**`kiam-backend`'s crash on missing `NEO4J_*`/`DATABASE_URL` env vars fixed: real, cloud-agnostic
+in-cluster Neo4j now stands up alongside KIAM, not stubbed out.** Two separate repos/commits, both
+pushed to `main`:
+- `~/Software/infra`: new standalone `charts/neo4j` (StatefulSet + Service + PDB +
+  SecretProviderClass), modeled on `charts/redis`'s "no managed cloud equivalent, in-cluster IS
+  production" pattern — supports both Azure Key Vault and GCP Secret Manager via the CSI driver, or
+  a manual K8s Secret for onprem. Wired `charts/kiam` to consume it (`NEO4J_URL`/`NEO4J_USER` plain
+  values, `NEO4J_PASSWORD` via the existing `kiam-secrets` Secret, now also synced from a new
+  `neo4j-password` Key Vault/Secret Manager object). Added `core-neo4j` ArgoCD Application. Only
+  touched `charts/neo4j/*`, `charts/kiam/{README.md,values.yaml,templates/{deployment,
+  secretproviderclass}.yaml}`, `apps/services/azure/core-neo4j.yaml` — left the large pile of
+  pre-existing unrelated uncommitted changes in that repo untouched. Committed `289d6eb`, pushed.
+- `~/Software/kiam`: `src/config/env.ts` now composes `DATABASE_URL` from
+  `DATABASE_HOST/PORT/NAME/USER/PASSWORD` when `DATABASE_URL` itself isn't set, instead of requiring
+  it as a separate explicit var. Committed `cd66e07`, pushed.
+
+Decision worth remembering: explicitly rejected my own first instinct to make Neo4j optional/stub
+it out — user wants a real, installed database, portable across Azure and other clouds, not an
+Azure-specific managed service (ruled out Neo4j Aura too, since creating a third-party SaaS account
+isn't something this agent does).
+
+### Outstanding
+- No actual Key Vault secret values exist yet for `neo4j-auth` (composed `neo4j/<password>` string)
+  or `neo4j-password` (bare password) — `kendra-kendralabs-kv` has public network access disabled,
+  so `az keyvault secret set` can't run from this machine. Needs the user to set them directly, or
+  an in-cluster/approved-private-link path.
+- `core-neo4j` and the updated `core-kiam` Applications haven't been synced in the live cluster yet;
+  nothing has actually been deployed — this was chart-authoring + `helm template` dry-run validation
+  only.
+- `docs/components/kiam/azure.md` not yet updated to document the new Neo4j provisioning step.
+
 ## Status Snapshot (2026-11-09, OpenBao credential-store backend swap committed+pushed)
 
 **UI credential store swapped from client-side Mongo envelope encryption to OpenBao KV v2,
