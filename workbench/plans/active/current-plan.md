@@ -1,6 +1,6 @@
 # Current Plan / Status
 
-## Status Snapshot (2026-11-15, Jenkins AKS provisioning plan reviewed + saved; PR #7 opened)
+## Status Snapshot (2026-11-15, Jenkins AKS node pools + ACR identity applied live; PR #7 opened)
 
 **Current work**: continuing the Jenkins CI/CD provisioning runbook
 (`~/Software/infra/docs/runbooks/azure-platform/10-jenkins-cicd-provisioning.md`)
@@ -28,12 +28,49 @@ Progress this session (`~/Software/infra`, env `envs/azure/kendralabs`):
    (human-readable; the binary `.tfplan` stays local/gitignored, same as the
    existing `2026-11-10-cicd-subnet.tfplan`). Committed `a8d767a`, pushed to
    `Kendralabs/kendrainfra main`.
+5. User chose to keep ACR on `Basic` rather than let the plan bump it to
+   `Standard` (no Jenkins-specific benefit, real cost impact) — pinned
+   `sku = "Basic"` in `envs/azure/kendralabs/main.tf`'s `module "registry"`
+   block, re-planned clean (5 add / 2 change-tags-only / 0 destroy). Committed
+   `a8523c4`, pushed.
+6. **Applied live** (`tofu apply`, full log saved to
+   `docs/planning/plans/2026-11-15-jenkins-aks-node-pools-apply.log`,
+   committed `2f172ad`, pushed): `jenkins` and `jenkinsagent` AKS node pools
+   now exist on `kendra-kendralabs-aks` (verified via
+   `az aks nodepool list` — both `Succeeded`), plus the `jenkins_acr_push`
+   managed identity, its federated credential to
+   `system:serviceaccount:core:jenkins-acr-push`, and its `AcrPush`-only role
+   assignment (no AKS role). ACR tags updated; AKS `api_server_access_profile`
+   block added. 5 added, 2 changed, 0 destroyed — exactly as planned.
 
-**Not yet applied** — pending user decision on the ACR Basic->Standard SKU
-change (real cost impact) before running `tofu apply` against live Azure.
-Still fully pending: rewriting runbook 10's Sections 2-3 for the AKS design,
-and the user's separate ask for a new runbook describing a parallel,
-subagent-driven Jenkins install.
+7. Resolved the chart's single-ServiceAccount-per-release limitation: the
+   Jenkins controller can only federate to one Azure identity, but we have
+   two (general Key-Vault-capable `workload`, ACR-push-only
+   `jenkins_acr_push`). Added a second `azurerm_federated_identity_credential`
+   (`jenkins_workload`) on the existing general `workload` UAI, scoped to
+   subject `system:serviceaccount:core:jenkins-workload` — deliberately a
+   different SA name from kiam's `kendra-workload` so the two charts don't
+   fight over the same ServiceAccount object in the `core` namespace. Wired
+   `charts/jenkins/values-azure.yaml`'s `workloadIdentity.azureClientId` and
+   `secrets.azureKeyVault.userAssignedIdentityClientId` to that identity's
+   client id (`88aeecff-fcf5-471c-89d7-1fb8774ee85e`). ACR push stays on the
+   separate `jenkins_acr_push` identity, left for agent pods, not the
+   controller, per the chart's own TODO. Added the ArgoCD `Application`
+   manifest `apps/services/azure/core-jenkins.yaml` (mirrors `core-neo4j.yaml`:
+   `project: core`, syncs `charts/jenkins` + `values-azure.yaml` to the `core`
+   namespace, automated prune/selfHeal). Planned clean (1 add, 1 unrelated
+   drift), applied live with full log at
+   `docs/planning/plans/2026-11-15-jenkins-workload-fic-apply.log`. Committed
+   `e83b3fc` on `kendrainfra main` — **not yet pushed** (no push instruction
+   given yet).
+
+**Not yet done**: pushing commit `e83b3fc`; actually syncing/deploying
+`core-jenkins` to the live cluster via ArgoCD; configuring Jenkins itself
+(plugins, Key Vault credential, one app repo wired end-to-end per runbook
+Sections 3-6); verifying Jenkins is reachable/loggable-into; rewriting
+runbook 10's Sections 2-3 to describe the AKS design instead of the
+VM/Bastion steps; and the user's separate ask for a new runbook describing a
+parallel, subagent-driven Jenkins install.
 
 ## Status Snapshot (2026-11-15, jenkins_ci_ops scaffold committed; AgentGateway JWT issuer fix merged + VPS reconciled)
 
