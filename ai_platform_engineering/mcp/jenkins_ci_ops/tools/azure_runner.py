@@ -1,0 +1,125 @@
+# Copyright 2026 CNOE
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Shared `az` CLI execution helper - identical contract to
+azure_cluster_ops/tools/azure_runner.py (fixed argv, never an arbitrary
+string; lazy service-principal login reused across calls in the same
+process). Duplicated rather than imported - see this package's README for
+why each MCP server ships as an independently-deployable unit.
+
+Used here only to read Terraform/ACR/AKS state needed for the Jenkins CI
+tools (e.g. resolving an ACR login server or checking an AKS node pool's
+status) - never to perform the write actions those tools stub out.
+"""
+
+import asyncio
+import logging
+import os
+from typing import Any, Dict, List
+
+from .credential_client import CredentialClientError, create_client_from_env, credentials_enabled
+
+logger = logging.getLogger(__name__)
+
+AZ_TIMEOUT = int(os.getenv("JENKINS_CI_OPS_AZ_TIMEOUT", "120"))
+REQUIRED_ENV = ("ARM_CLIENT_ID", "ARM_TENANT_ID", "ARM_SUBSCRIPTION_ID")
+ARM_CLIENT_SECRET_REF = os.getenv("ARM_CLIENT_SECRET_REF", "jenkins-ci-ops/arm-client-secret")
+
+_logged_in = False
+_login_lock = asyncio.Lock()
+
+
+class AzureConfigError(RuntimeError):
+    """Raised when required Azure service-principal config is missing, or az login fails."""
+
+
+def _require_config() -> None:
+    missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
+    if missing:
+        raise AzureConfigError(
+            f"Azure service principal is not configured, missing env vars: {', '.join(missing)}"
+        )
+    if not credentials_enabled() and not os.getenv("ARM_CLIENT_SECRET"):
+        raise AzureConfigError(
+            "Azure service principal is not configured, missing env var: ARM_CLIENT_SECRET"
+        )
+
+
+async def _resolve_client_secret() -> str:
+    if not credentials_enabled():
+        return os.environ["ARM_CLIENT_SECRET"]
+    try:
+        client = create_client_from_env()
+        return await client.retrieve_secret(ARM_CLIENT_SECRET_REF)
+    except CredentialClientError as e:
+        raise AzureConfigError(f"Failed to resolve ARM_CLIENT_SECRET via credential exchange: {e}") from e
+
+
+async def _run(argv: List[str]) -> Dict[str, Any]:
+    cmd_str = " ".join(argv)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=AZ_TIMEOUT)
+        return {
+            "command": cmd_str,
+            "stdout": stdout.decode("utf-8", errors="replace"),
+            "stderr": stderr.decode("utf-8", errors="replace"),
+            "exit_code": proc.returncode,
+            "success": proc.returncode == 0,
+        }
+    except asyncio.TimeoutError:
+        return {"command": cmd_str, "error": "az command timed out", "success": False}
+
+
+async def _ensure_login() -> None:
+    global _logged_in
+    if _logged_in:
+        return
+    _require_config()
+    async with _login_lock:
+        if _logged_in:
+            return
+        client_secret = await _resolve_client_secret()
+        login_result = await _run([
+            "az", "login", "--service-principal",
+            "-u", os.environ["ARM_CLIENT_ID"],
+            "-p", client_secret,
+            "--tenant", os.environ["ARM_TENANT_ID"],
+            "--output", "none",
+        ])
+        if not login_result["success"]:
+            raise AzureConfigError(f"az login --service-principal failed: {login_result.get('stderr', '')}")
+
+        set_sub_result = await _run([
+            "az", "account", "set", "--subscription", os.environ["ARM_SUBSCRIPTION_ID"],
+        ])
+        if not set_sub_result["success"]:
+            raise AzureConfigError(f"az account set failed: {set_sub_result.get('stderr', '')}")
+
+        _logged_in = True
+
+
+async def run_az_command(argv: List[str]) -> Dict[str, Any]:
+    """
+    Run a single fixed `az` command (after ensuring login) and return its
+    result.
+
+    Args:
+        argv: The az subcommand as an argument list, e.g.
+            ["acr", "repository", "show-tags", "--name", registry].
+            Never built from unsanitized user input - callers only pass
+            fixed, allowlisted command shapes.
+    """
+    await _ensure_login()
+    try:
+        return await _run(["az", "--output", "json"] + argv)
+    except AzureConfigError:
+        raise
+    except Exception as e:
+        logger.error(f"jenkins-ci-ops az command failed: {e}")
+        return {"command": " ".join(argv), "error": str(e), "success": False}
