@@ -1,5 +1,85 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-15, Jenkins AKS provisioning plan reviewed + saved; PR #7 opened)
+
+**Current work**: continuing the Jenkins CI/CD provisioning runbook
+(`~/Software/infra/docs/runbooks/azure-platform/10-jenkins-cicd-provisioning.md`)
+against live Azure, after resolving a real architecture conflict between that
+runbook (written for a standalone VM) and the already-scaffolded AKS-node-pool
+design (`modules/azure/compute`'s `jenkins`/`jenkinsagent` node pools,
+`modules/azure/registry`'s workload-identity-federated `jenkins_acr_push`,
+the `charts/jenkins` Helm chart, and the sibling `~/Software/kendra-ci` repo's
+shared library) — user explicitly chose **AKS node pools**, not the VM design.
+
+Progress this session (`~/Software/infra`, env `envs/azure/kendralabs`):
+1. Fixed OpenTofu backend re-init (`tofu init -reconfigure` needed
+   `-backend-config=backend.hcl` explicitly — bare `-reconfigure` doesn't
+   pick up the local, gitignored `backend.hcl`).
+2. Ran `tofu plan` — found the plan was trying to **create** ACR
+   `kendrakendralabsacr`, which already exists live (created 2026-11-09).
+   Resolved via `tofu import module.registry.azurerm_container_registry.this
+   <resource-id>` (provider is `Microsoft.ContainerRegistry`, not
+   `Microsoft.ContainerService` — a typo cost one failed attempt).
+3. Re-planned clean: **5 to add, 2 to change, 0 to destroy** — new
+   `jenkins`/`jenkinsagent` AKS node pools, ACR `Basic`->`Standard` SKU bump,
+   and the `jenkins_acr_push` UAI + federated credential + `AcrPush`-only role
+   assignment (no AKS role, per the registry module's hard-boundary design).
+4. Saved the plan for review: `docs/planning/plans/2026-11-15-jenkins-aks-node-pools.txt`
+   (human-readable; the binary `.tfplan` stays local/gitignored, same as the
+   existing `2026-11-10-cicd-subnet.tfplan`). Committed `a8d767a`, pushed to
+   `Kendralabs/kendrainfra main`.
+
+**Not yet applied** — pending user decision on the ACR Basic->Standard SKU
+change (real cost impact) before running `tofu apply` against live Azure.
+Still fully pending: rewriting runbook 10's Sections 2-3 for the AKS design,
+and the user's separate ask for a new runbook describing a parallel,
+subagent-driven Jenkins install.
+
+## Status Snapshot (2026-11-15, jenkins_ci_ops scaffold committed; AgentGateway JWT issuer fix merged + VPS reconciled)
+
+Two pieces of work this session:
+
+1. **`jenkins_ci_ops` MCP server scaffold** (`~/Software/caipe`,
+   `ai_platform_engineering/mcp/jenkins_ci_ops/`) — new MCP server following
+   `azure_cluster_ops`'s conventions: Tier 1 read-only tools (Jenkins build
+   status/queue, ACR repo list/digest, Key Vault secret names, Terraform
+   state), Tier 2 `terraform_plan`, and deliberately-unimplemented Tier 3
+   stubs (`terraform_apply`, `keyvault_set_secret` — both refuse and point at
+   the KIAM in-cluster-pod provisioning runbook instead of writing anything).
+   Committed `e0b6539f6` on branch `prebuild/feat/infra-ops-mcp`, pushed to
+   `kendralabs` remote, and opened as
+   [PR #7](https://github.com/Kendralabs/ai-platform-engineering/pull/7).
+2. **`AGENTGATEWAY_JWT_ISSUER` docker-compose wiring gap, found live on the
+   production VPS and fixed via PR**: `/opt/caipe/docker-compose.yaml` had an
+   uncommitted 1-line edit adding this env var to `agentgateway-config-bridge`
+   (the code already read it via `os.getenv`, but compose never set it, so it
+   silently used the dev-realm default). Replicated the fix on a clean branch
+   off `kendralabs/main`, opened and merged PR
+   [#6](https://github.com/Kendralabs/ai-platform-engineering/pull/6) (squash
+   commit `ba79b78ef`), then reconciled the VPS: discarded the now-redundant
+   local edit and `git pull`'d `/opt/caipe` to `ba79b78ef` (fast-forward,
+   clean tree, no container restart needed — only the config declaration
+   changed, not running behavior).
+
+Also verified live Azure MCP agents status on the VPS while investigating:
+all 4 `mcp-azure-*` containers still healthy, now 7-12 days uptime (as of
+2026-11-15) vs. the 3-days snapshot from 2026-11-06 — no redeploy/restart
+occurred in between. `slack-bot` remains deliberately stopped (bad token).
+
+### Outstanding
+- Decide ACR Basic->Standard SKU change, then `tofu apply` the saved
+  Jenkins AKS node-pool plan (or re-plan excluding the SKU change first).
+- Rewrite `10-jenkins-cicd-provisioning.md` Sections 2-3 for the AKS design.
+- Author the new, separate runbook for installing/configuring Jenkins via
+  parallel subagents (user's second ask this session — not started).
+- Long-outstanding, unrelated, not touched this session: splitting entangled
+  infra repo commit `57a190e`, `jenkinsagent`/`jenkinsagents` node-pool-name
+  mismatch (Terraform resource is 12-char `jenkinsagent`; `kendra-ci`'s
+  `ConfigLoader.groovy` hardcodes 13-char `jenkinsagents` nodeSelector),
+  KIAM Key Vault access-policy gap (Get/List only, no Set), provisioning a
+  real `tofu apply`'d customer environment, real ARM_* creds in
+  `/opt/caipe/.env`.
+
 ## Status Snapshot (2026-11-10, spend-report design doc written; cnoe-io remote removed)
 
 Wrote `docs/runbooks/azure-platform/09-daily-spend-report.md` (`~/Software/infra`), comparing a
