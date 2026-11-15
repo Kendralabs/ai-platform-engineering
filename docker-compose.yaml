@@ -1725,6 +1725,7 @@ services:
       - rbac
     environment:
       AGENTGATEWAY_TARGETS_URL: ${AGENTGATEWAY_TARGETS_URL:-http://caipe-ui:3000/api/internal/agentgateway/mcp-targets}
+      AGENTGATEWAY_JWT_ISSUER: ${AGENTGATEWAY_JWT_ISSUER:-${OIDC_ISSUER:-http://localhost:7080/realms/caipe}}
       AGENTGATEWAY_TARGETS_TOKEN: ${AGENTGATEWAY_TARGETS_TOKEN:-agentgateway-config-bridge-dev-token}
       AGENTGATEWAY_CONFIG_PATH: /generated/config.yaml
       AGENTGATEWAY_BOOTSTRAP_CONFIG_PATH: /bootstrap/config.yaml
