@@ -1,5 +1,40 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-16, Jenkins reachable externally via Cloudflare Tunnel on port 8110)
+
+**Current work**: Jenkins CI/CD provisioning — closed out the external-access piece. Jenkins
+controller now serves on internal port **8110** (non-default, defense-in-depth) and is reachable
+publicly at `https://ci-k7x2p9.kendralabs.com` through a Cloudflare Tunnel, with no inbound NSG
+rule or public IP on the AKS cluster.
+
+Progress this session (`~/Software/infra`, chart `charts/jenkins`, live cluster
+`kendra-kendralabs-aks`):
+1. Rendered and applied (user ran the `kubectl apply` directly) the chart with the new
+   `JENKINS_OPTS=--httpPort=8110` env var and matching Service port — fixes the
+   `jenkins/jenkins` image's hardcoded `--httpPort=8080` default.
+2. Hit a real gotcha: the manual apply was **silently reverted** a few minutes later. Root cause —
+   ArgoCD's `core-jenkins` Application has `selfHeal: true`, and the underlying commit hadn't been
+   pushed to `origin/main` yet, so the reconciler treated the change as drift and undid it. Fixed
+   by pushing (user said "go"); ArgoCD then synced the real desired state and it stuck.
+3. Created the Cloudflare Tunnel public-hostname route (dashboard, user approved: "yes you do
+   it") — `ci-k7x2p9.kendralabs.com` → `http://localhost:8110` — auto-creating the CNAME DNS
+   record. The tunnel had zero routes configured before this, which was the actual reason Jenkins
+   wasn't reachable yet.
+4. Verified end-to-end against live infra: fresh pod `jenkins-7fb69dc76f-cjcmd` came up `2/2
+   Running`, 0 restarts; Jenkins log shows `ServerConnector@...{0.0.0.0:8110}` + "fully up and
+   running"; cloudflared log shows the ingress rule registered; `curl -I
+   https://ci-k7x2p9.kendralabs.com/` returns `HTTP/2 200`.
+5. Wrote up the full setup in Notion ("Jenkins CI/CD — Cloudflare Tunnel & Port Setup") — obscure
+   hostname + non-default port rationale (defense in depth, not a substitute for Jenkins' own
+   auth), the `JENKINS_OPTS` mechanism, the tunnel route, and the ArgoCD selfHeal gotcha.
+
+### Outstanding
+- Configure Jenkins itself: plugins, GitHub Branch Source credential using the GitHub App.
+- Rewrite `~/Software/infra/docs/runbooks/azure-platform/10-jenkins-cicd-provisioning.md`
+  Sections 2–3 to match the AKS-node-pool design actually applied (not the old standalone-VM
+  draft).
+- Separate, unstarted ask: author a runbook on parallel subagent-driven Jenkins installation.
+
 ## Status Snapshot (2026-11-15, Jenkins AKS node pools + ACR identity applied live; PR #7 opened)
 
 **Current work**: continuing the Jenkins CI/CD provisioning runbook
