@@ -37,7 +37,28 @@ Progress this session (`~/Software/infra`, chart `charts/jenkins`, live cluster
    Kendralabs/kcg"), and `jobs/kcg/branches/` lists real discovered branches including `dev` and
    `main` — the credential and job are fully working end-to-end, not just created.
 
+7. Ran a real `dev` branch build (the first), which exposed two further issues:
+   - Missing plugins: `kcg`'s `Jenkinsfile` uses `ansiColor(...)`/`lock(...)` options, requiring
+     the `ansicolor`/`lockable-resources` plugins — not in the baked controller image. Added both
+     to `plugins.txt`, rebuilt+pushed a new controller image via `az acr build` (GitHub Actions
+     image-build workflow is still blocked on Actions billing, same workaround as before), bumped
+     `values.yaml`'s image tag. Committed `99079d7` + `91815de`, pushed, synced, restarted. Verified
+     all three plugins load cleanly on the new pod — **this also closes the long-standing
+     `configuration-as-code` plugin-bake gap** noted in the 2026-11-17 incident snapshot below.
+   - GitHub App lacks "Commit statuses: Read & write" permission (`403 Resource not accessible by
+     integration` when posting build status) — needs the user to grant it on the App's GitHub
+     settings page; not something I can do.
+   - Re-ran the build after the plugin fix: **same failure**, but on inspection it's not a
+     missing-plugin issue at all — Jenkins' own error lists the declarative-pipeline `options{}`
+     block's valid directive types, and neither `ansiColor(...)` nor `lock(...)` is usable there
+     directly (needs `wrap([$class: 'AnsiColorBuildWrapper', ...])` / stage-scoped `lock`). This is
+     a bug in **`kcg`'s own `Jenkinsfile`**, out of scope for this infra repo — flagged to the user,
+     not fixed (no access to the `kcg` repo from here).
+
 ### Outstanding
+- `kcg`'s `Jenkinsfile` needs its `options{}` block fixed (`ansiColor`/`lock` syntax) — belongs to
+  the `kcg` repo, not `infra`.
+- GitHub App needs "Commit statuses: Read & write" permission granted by the user.
 - Rewrite `~/Software/infra/docs/runbooks/azure-platform/10-jenkins-cicd-provisioning.md`
   Sections 2-3 for the AKS design (carried over, untouched).
 - Investigate `core-kaig` Degraded status; `core-observability`/`core-spire` OutOfSync/Missing
