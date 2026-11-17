@@ -1,5 +1,93 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-17, GitHub App credential + kcg multibranch job live and verified)
+
+**Current work**: Jenkins CI/CD provisioning — GitHub Branch Source auth for the `kcg` repo's
+`dev` branch. Closed out, verified end-to-end against the live GitHub API.
+
+Progress this session (`~/Software/infra`, chart `charts/jenkins`, live cluster
+`kendra-kendralabs-aks`):
+1. User created a GitHub App (`kendralabs-jenkins-ci`, App ID `5804706`, installed as
+   installation `183033882`, scoped to specific repos). Added `jenkins-github-app-id` and
+   `jenkins-github-app-installation-id` as two more CSI-synced Key Vault objects alongside the
+   existing private key (`secretproviderclass.yaml`), and a new
+   `01-github-credential-and-job.groovy` init script that creates a `GitHubAppCredentials`
+   credential (`github-app-kcg`) and a `kcg` multibranch pipeline job filtered to just the `dev`
+   branch, entirely from core Jenkins/plugin Groovy APIs — never prints the private key. Committed
+   `64c7cbd`, pushed.
+2. Private key transfer: Key Vault has public network access disabled, so writes had to go
+   through an in-cluster, workload-identity-authenticated throwaway pod (reusing the
+   `jenkins-workload` ServiceAccount's federated identity) — the same pattern used earlier this
+   session for the admin-password secret. Classifier denied the first `kubectl apply` of that pod;
+   user explicitly approved re-running it, and the retry succeeded.
+3. Added an unconditional branch-indexing scan trigger (`job.scheduleBuild2(0)` every boot) so a
+   credential/API problem surfaces immediately in the boot log instead of waiting on the hourly
+   `PeriodicFolderTrigger`. Committed `16dbb06`, pushed.
+4. First scan failed: `InvalidKeySpecException: Private key must be a PKCS#8 formatted string` —
+   GitHub's downloaded App key is PKCS#1, but the plugin requires PKCS#8. Converted in another
+   in-cluster pod (`openssl pkcs8 -topk8 ...`) and rewrote the Key Vault secret.
+5. Second scan still failed with the *same* error — root cause: `GitHubAppCredentials` snapshots
+   the private key into the Jenkins credential object at creation time, so a later Key Vault
+   rotation never reaches an already-existing credential. Fixed the init script to always call
+   `credentialsStore.updateCredentials(...)` (refresh every boot) instead of skipping when found.
+   Committed `891bf1d`, pushed.
+6. Restarted Jenkins once more; boot log now shows `Updated GitHub App credential 'github-app-kcg'`
+   → `Triggered branch-indexing scan for 'kcg'`. The indexing log confirms a real GitHub API
+   handshake ("Connecting to https://api.github.com using 5804706/****** ... Examining
+   Kendralabs/kcg"), and `jobs/kcg/branches/` lists real discovered branches including `dev` and
+   `main` — the credential and job are fully working end-to-end, not just created.
+
+### Outstanding
+- Rewrite `~/Software/infra/docs/runbooks/azure-platform/10-jenkins-cicd-provisioning.md`
+  Sections 2-3 for the AKS design (carried over, untouched).
+- Investigate `core-kaig` Degraded status; `core-observability`/`core-spire` OutOfSync/Missing
+  (carried over, untouched).
+- Confirm whether a real ghcr.io image exists for kcg (carried over, untouched).
+- Separate, unstarted ask: author a runbook on parallel subagent-driven Jenkins installation.
+- Enabling macOS Remote Login on the user's Mac for Cloudflare Tunnel SSH — blocked on the user's
+  physical presence.
+
+## Status Snapshot (2026-11-17, Jenkins unauthenticated-admin incident closed; plugin-bake gap remains)
+
+**Current work**: live security incident — Jenkins at `https://ci-k7x2p9.kendralabs.com` (the
+Cloudflare-tunneled controller from the 2026-11-16 snapshot below) was granting full
+unauthenticated admin access; user reported another person opened the page and got in. Closed.
+
+Progress this session (`~/Software/infra`, chart `charts/jenkins`, live cluster
+`kendra-kendralabs-aks`):
+1. Root-caused: JCasC (`configmap-casc.yaml`) had no `securityRealm`/`authorizationStrategy` at
+   all, and `runSetupWizard` is disabled, so anyone reaching the controller got full admin with no
+   login. First fix attempt added the realm/strategy to JCasC, wrote a new `jenkins-admin-password`
+   Key Vault secret via the proven workload-identity write-pod pattern, and synced via
+   `kubectl -n argocd patch application core-jenkins ...` (no `argocd` CLI on this machine).
+   Committed+pushed as `7546634`.
+2. Found the sync "succeeded" but the pod never restarted — this chart's Deployment has no
+   ConfigMap-checksum annotation, so a ConfigMap-only change doesn't trigger a rollout. Fixed
+   one-time via `kubectl -n core rollout restart deployment/jenkins`.
+3. Verified anonymous access was **still** working post-restart. Dug in: the live controller image
+   doesn't actually have the `configuration-as-code` plugin installed at all (despite
+   `plugins.txt` listing it), so the JCasC security block was silently never read — dead
+   configuration both before and after step 1/2.
+4. Real fix: added a Groovy init script (`init.groovy.d`, `templates/configmap-init-groovy.yaml`),
+   which uses only core Jenkins APIs and needs no plugin, to set the same local-realm +
+   `loggedInUsersCanDoAnything`/`allowAnonymousRead:false` config. Applied directly to the live
+   cluster (ConfigMap + deployment volume/mount patch, which triggered its own rollout).
+5. Verified live end-to-end: anonymous `GET /` now returns `403`, `/login` renders "Sign in -
+   Jenkins", controller logs show the init script executing and applying the realm. Committed
+   (`8bf3f1b`) and pushed to `Kendralabs/kendrainfra main`.
+
+### Outstanding
+- **Known gap, not yet fixed**: `configuration-as-code` plugin is missing from the running
+  controller image, so `configmap-casc.yaml`'s JCasC block (including the Kubernetes cloud
+  definition) has no effect — needs the controller image rebuilt from `plugins.txt` (via
+  `jenkins-plugin-cli` or similar) rather than relying on the stock `jenkins/jenkins` image plus
+  whatever got installed by hand.
+- This chart's Deployment still has no ConfigMap-checksum/pod-template-hash annotation, so future
+  JCasC-only ArgoCD syncs won't auto-restart the pod — worth adding at the chart level.
+- Carried over, untouched this session: Jenkins plugin/GitHub Branch Source credential config,
+  rewriting runbook 10 Sections 2-3 for the AKS design, the parallel-subagent Jenkins-install
+  runbook ask.
+
 ## Status Snapshot (2026-11-16, Jenkins reachable externally via Cloudflare Tunnel on port 8110)
 
 **Current work**: Jenkins CI/CD provisioning — closed out the external-access piece. Jenkins
