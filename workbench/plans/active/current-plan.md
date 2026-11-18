@@ -1,5 +1,181 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-18, kcg Jenkins: pipeline-utility-steps fixed; commit-status 403 + docker/agent gaps open)
+
+**Current work**: fixed the `kcg/dev` build's missing `writeJSON` DSL method by adding the
+`pipeline-utility-steps` Jenkins plugin. Confirmed working end-to-end on the live cluster.
+
+What was done, in order:
+1. Root cause: `kcg`'s `Jenkinsfile` `post{always{}}` block calls `writeJSON(...)` to build its
+   append-only deploy ledger entry; the controller image didn't bake in `pipeline-utility-steps`,
+   so build #2 failed with `No such DSL method 'writeJSON'`.
+2. Added `pipeline-utility-steps` to `~/Software/infra/charts/jenkins/plugins.txt` (same
+   declarative, git-sourced mechanism used for the prior `ansicolor`/`lockable-resources`
+   additions — never installed via the Jenkins UI).
+3. Built + pushed the updated controller image via `az acr build` (direct-to-ACR; GitHub Actions
+   billing is still not enabled for Kendralabs, so `build-jenkins-image.yml` remains bypassed) —
+   `kendrakendralabsacr.azurecr.io/jenkins-controller:8aa317c8e6e2649bca4f1a8e6a0cedb20d5c46d1`.
+4. Committed `plugins.txt` (`8aa317c`) and the `values.yaml` tag bump (`5876990`→rebased to
+   `3e828d1`) on `infra` `main`. Pushed after explicit user confirmation ("ye"). Had to stash
+   unrelated pre-existing dirty-tree changes before rebasing onto a concurrent unrelated PR merge
+   (`feat(kact): draft kact-api chart...`) that landed on `origin/main` in the meantime, then
+   restored the stash cleanly afterward — only `charts/jenkins/*` was ever committed.
+5. ArgoCD (`core-jenkins`, auto-sync+self-heal) picked up the new tag on its own; Jenkins
+   controller pod rolled (`jenkins-5f5856c749-j6fsw`) onto the new image within ~30s of push.
+6. Verified `pipeline-utility-steps` present via `/pluginManager/api/json`, then re-triggered
+   `kcg/dev` (build #3) via the same safe crumb+cookie-jar REST technique (never printing
+   `$JENKINS_ADMIN_PASSWORD`). Confirmed `[Pipeline] writeJSON` / `[Pipeline] writeFile` now run
+   with no DSL error — the plugin fix is confirmed working.
+
+**Still open (found via build #3, none caused by this change):**
+- GitHub App commit-status 403 (`Resource not accessible by integration`) **persists** even after
+  user confirmed granting "Commit statuses: Read & write" on the `kendralabs-jenkins-ci` App
+  (App ID 5804706). Likely needs a separate installation-approval step at
+  `github.com/organizations/Kendralabs/settings/installations` (org) or
+  `github.com/settings/installations` (personal) — not yet checked/resolved.
+- Build #3 then failed at the `docker build` step: `docker: not found` on the Jenkins agent — no
+  Docker available in that execution environment.
+- Post-actions step then failed: `cannot create /var/log/jenkins/deployments/deployments.jsonl:
+  Directory nonexistent` — the deploy-ledger directory `writeJSON`/`writeFile` targets doesn't
+  exist yet on the controller.
+- Investigated `docker: not found`: root cause is **not an environment gap** — kcg's own
+  `docs/guides/AZURE-DEV-DEPLOY.md` (draft, 2026-11-16) explicitly documents that the AKS
+  `kcg/dev` multibranch job must read `Jenkinsfile.azure` (uses `az acr build` + Kubernetes
+  pod-template agents, no Docker), not `Jenkinsfile` (VPS-only: podman + SSH deploy to the
+  Hostinger VPS at 191.215.37.209 — kcg's actual staging/production CI, entirely separate from
+  this AKS "dev" path). **User made the explicit architectural call**: keep two separate dev
+  pipelines, one Azure/AKS and one VPS (VPS to be decommissioned eventually) — this authorized
+  the fix below.
+- **Fixed, committed, pushed, deployed (infra `f0fecbb`)**: repointed the `kcg` multibranch job's
+  script path to `Jenkinsfile.azure` in `01-github-credential-and-job.groovy`, enforced on every
+  controller boot (idempotent, same pattern as the credential refresh). ArgoCD hard-synced;
+  `jenkins` deployment restarted (ConfigMap changes don't trigger a pod restart on their own —
+  no checksum annotation wired up); controller logs confirmed `Set 'kcg' script path to
+  Jenkinsfile.azure`.
+- Re-triggered build (#4): it now correctly read `Jenkinsfile.azure` and tried to launch a
+  Kubernetes agent pod — but hit a **new, real blocker**: `jenkins-workload` ServiceAccount had
+  **no RBAC at all** in the `core` namespace (`pods is forbidden ... Azure does not have opinion
+  for this user`). Jenkins' own Kubernetes Cloud plugin needs to list/watch/create pods (+
+  pods/exec, pods/log, events) to launch per-build agents.
+- **Fixed, committed, pushed, deployed (infra `d505dc9`)**: added
+  `charts/jenkins/templates/rbac-workload.yaml` — a `Role`/`RoleBinding` granting
+  `jenkins-workload` exactly those pod/pods-exec/pods-log/events verbs in `core`. Helm-template
+  dry-run validated before commit. ArgoCD hard-synced (RBAC takes effect immediately, no pod
+  restart needed). Verified the `Role`/`RoleBinding` exist live.
+- Re-triggered again (build #4, same number — this was the retry after the RBAC fix): the agent
+  pod (`kcg-dev-4-xvk6r-0hl6x-zscw2`, 4/4 containers) launched successfully this time — **RBAC fix
+  confirmed working**. Pipeline proceeded through Checkout SCM into the "Backend tests" stage,
+  past the old `docker: not found` failure entirely.
+- Build #4 ultimately still **FAILED**, but on a **kcg-repo-side** issue, out of scope for
+  `infra`: `uv sync --frozen` resolves Python 3.14.4 from kcg's own `.python-version`, which is
+  incompatible with `pyproject.toml`'s declared `requires-python = ">=3.10, <3.14"`. This matches
+  `AZURE-DEV-DEPLOY.md`'s own disclosed gaps (stale/mismatched env pinning) — needs a kcg-repo fix
+  (pin `.python-version` to a <3.14 version, e.g. via `uv python pin 3.13`), not an infra change.
+- `deployments.jsonl` directory-missing (lower priority, pipeline now fails earlier at Backend
+  tests so this stage isn't even reached) and the GitHub commit-status 403 (`Resource not
+  accessible by integration`, still 403 on build #4's checkout/post stages) remain open.
+
+**Next open items**: (1) kcg repo: fix `.python-version`/`pyproject.toml` Python version mismatch
+for `Jenkinsfile.azure`'s Backend tests stage — report to user, don't fix from `infra`; (2)
+GitHub commit-status 403 — user has not yet reported back on checking the App's
+installation/permissions page; (3) `deployments.jsonl` directory-missing, once pipeline gets far
+enough to reach that stage.
+
+## Status Snapshot (2026-11-18, clickhouse-signoz-secrets password rotated — live cluster only)
+
+**Current work**: rotated the live ClickHouse `signoz` user's password on
+`kendra-kendralabs-aks`, closing the outstanding item from the prior snapshot below. Live-cluster
+action only — no git commit/push (this Secret is manually created, not Helm-templated; see
+`charts/clickhouse/README.md`/`charts/observability/README.md` "Known gaps").
+
+What was done, in order:
+1. Generated a new random password (`openssl rand -hex 24`) and patched the `clickhouse-signoz-secrets`
+   Secret (`observability` namespace) with it.
+2. `ALTER USER signoz ...` failed (`ACCESS_STORAGE_READONLY`) — the `signoz` user is defined via
+   the official ClickHouse image's auto-generated `users.d/default-user.xml`, not a SQL-manageable
+   user, so `ALTER USER` can't touch it. Fix: deleted pod `clickhouse-0` and let the StatefulSet
+   recreate it — the image's entrypoint regenerates that XML from the (already-updated)
+   `CLICKHOUSE_PASSWORD` env var on every container start. Verified new password accepted, old
+   password rejected.
+3. Restarted `otel-collector` (clean rollout) and `signoz-query-service` to pick up the new
+   password from the same Secret.
+4. `signoz-query-service`'s rollout hit a real scheduling deadlock: its PVC is an Azure Disk
+   (RWO), zone-locked to `swedencentral-2`, and the Deployment's default `RollingUpdate` strategy
+   tried to schedule a surge pod before releasing the old one — `FailedAttachVolume: Volume is
+   already used by pod(s) ...`. The cluster-autoscaler scaled up a node, but a fresh node in the
+   wrong zone (`swedencentral-1`) came up first; a second one in the correct zone followed shortly
+   after. Broke the deadlock by deleting the old pod directly once the new pod had a schedulable
+   node. New pod came up `1/1 Running`.
+5. Verified end-to-end: `sha256sum` of `$CLICKHOUSE_PASSWORD` matches across the `clickhouse-0`,
+   `otel-collector`, and `signoz-query-service` pods and the Secret itself (compared hashes only,
+   never printed the value); `signoz-query-service`'s `/api/v1/health` returns `{"status":"ok"}`.
+   One transient `Authentication failed` log line appeared once at container boot (non-fatal —
+   only skipped a metrics-metadata preload) and the service recovered on its own; no other auth
+   errors since.
+
+**Self-disclosed mistake**: while diagnosing the `ACCESS_STORAGE_READONLY` error, a redaction
+attempt (`sed` pattern meant to mask `/etc/clickhouse-server/users.d/default-user.xml` before
+printing it) didn't match CDATA-wrapped XML content, so the pre-rotation ClickHouse password was
+printed in full in a tool result in this conversation. That value is now confirmed invalidated
+(rejected by the live server since the rotation above), but the exposure itself was a scripting
+mistake on my part and is recorded here for transparency. Going forward: never print config/XML
+files that may embed credentials without first proving a redaction pattern actually matches the
+file's real format (including CDATA), or avoid printing them at all in favor of hash comparisons
+or structural `grep -c` checks.
+
+### Outstanding (closed this session: ClickHouse signoz password rotation)
+- All items carried over from the 2026-11-17/2026-11-18 snapshots below remain open and untouched
+  this session (kcg `Jenkinsfile` `options{}` bug, GitHub App commit-status permission, runbook 10
+  Sections 2-3 rewrite, `core-kaig`/`core-spire` status investigation, parallel-subagent
+  Jenkins-install runbook, macOS Remote Login enablement).
+
+## Status Snapshot (2026-11-18, core-observability ClickHouse/otel-collector fixes pushed; generic Jenkins CI/CD doc added)
+
+**Current work**: `~/Software/infra`, `core-observability` ArgoCD app (chart `charts/observability`,
+`charts/clickhouse`) — fixed the `otel-collector-migrator` PreSync hook failures and the
+follow-on `otel-collector` crash loop; also added a shareable, genericized Jenkins-on-Azure
+CI/CD doc.
+
+Progress this session:
+1. Fixed `otel-collector-migrator` PreSync hook Job failures via a ClickHouse 25.8 version bump
+   (chart `charts/clickhouse`). Committed `033ada9`/`a846ae6`/`d154504`, pushed.
+2. Fixed `otel-collector` Deployment crash-looping (`failed to create "clickhousetraces" exporter
+   for data type "metrics": telemetry type is not supported`) by giving the metrics pipeline its
+   own `clickhousemetricswrite` exporter (`charts/observability/templates/otel-collector-configmap.yaml`,
+   `values.yaml`), matching the known-working pattern in `~/Software/kcg/infra/signoz/config/otel-collector-config.yaml`.
+   Committed `eecc1dc`, pushed.
+3. That fix didn't take effect on first redeploy — ArgoCD synced cleanly but the old pod kept
+   running stale config, because the Deployment had no ConfigMap-change-detection mechanism.
+   Added the standard `checksum/config` annotation to
+   `charts/observability/templates/otel-collector-deployment.yaml` so any future config-only
+   change forces a rollout. Committed `6812bea`, pushed.
+4. **Follow-up check (done) found the fix in item 2 was itself wrong**: once the checksum
+   annotation (item 3) actually forced a rollout, the pod crash-looped with `unknown type:
+   "clickhousemetricswrite"` — this image build (`docker.io/signoz/signoz-otel-collector:latest`)
+   never registered that exporter at all. Confirmed the real name via the error's own
+   valid-values list, then test-deployed one-off pods with candidate configs to confirm
+   `signozclickhousemetrics` is correct and takes only a `dsn` field (no
+   `resource_to_telemetry_conversion`). Fixed `charts/observability/{values.yaml,
+   templates/otel-collector-configmap.yaml}`. Committed `ef4abca`, pushed. Forced an ArgoCD
+   refresh (`argocd.argoproj.io/refresh=hard` annotation — webhook/poll hadn't picked it up
+   yet), waited for `Synced`, and verified live: new pod `1/1 Running`, 0 restarts, "Everything
+   is ready", clickhousetraces exporter successfully querying ClickHouse; old ReplicaSets scaled
+   to 0. **Closed.**
+5. Separate ask: user wanted a shareable dev/staging/prod Jenkins-on-Azure CI/CD doc usable
+   across repos. Found the real (non-aspirational) source material already in this repo —
+   `docs/planning/2026-11-10-jenkins-azure-cicd-pipeline-plan.md` +
+   `docs/runbooks/azure-platform/10-jenkins-cicd-provisioning.md` — and wrote a genericized
+   version with all org-specific names (clusters, ACR, approver identity, region) replaced by
+   placeholders: `docs/operational/jenkins-azure-cicd-dev-staging-prod.md`. Committed `f5d2b4d`,
+   pushed.
+
+### Outstanding
+- ~~Rotate `clickhouse-signoz-secrets`' password~~ **Closed 2026-11-18** — see snapshot above.
+- All items carried over from the 2026-11-17 snapshot below remain open and untouched this
+  session (kcg `Jenkinsfile` `options{}` bug, GitHub App commit-status permission, runbook 10
+  Sections 2-3 rewrite, `core-kaig`/`core-spire` status investigation, parallel-subagent
+  Jenkins-install runbook, macOS Remote Login enablement).
+
 ## Status Snapshot (2026-11-17, GitHub App credential + kcg multibranch job live and verified)
 
 **Current work**: Jenkins CI/CD provisioning — GitHub Branch Source auth for the `kcg` repo's
@@ -980,3 +1156,59 @@ real live Azure infra.
   this session, safe to leave or clean up separately.
 - A pile of pre-existing, unrelated uncommitted changes remains in `~/Software/infra` (kendra-infra
   app/backend, docs, other modules) — predates this session, intentionally left untouched/uncommitted.
+
+## Session: `core-observability` otel-collector-migrator ClickHouse fixes (2026-11-18)
+
+### Summary
+Chased `core-observability`'s `otel-collector-migrator` PreSync hook Job through three
+sequential root causes in `~/Software/infra` (separate repo), each pushed as its own commit
+after explicit per-commit approval. Landed on a bigger, unresolved architectural gap.
+
+### What was done
+- `2d8635c` — fixed Kubernetes env-var ordering bug: `SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN`'s
+  `$(CLICKHOUSE_PASSWORD)` reference was defined before `CLICKHOUSE_PASSWORD` itself in both
+  `charts/observability/templates/migrator-job.yaml` and `.../otel-collector-deployment.yaml` —
+  `$(VAR)` only expands to vars defined earlier in the same list, so the literal string was being
+  sent as the password (ClickHouse code 516 "Authentication failed").
+  `charts/observability/templates/otel-collector-deployment.yaml`.
+- `73f9659` — fixed hardcoded `SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER: cluster`, which doesn't
+  exist on the live ClickHouse (`system.clusters` only has `"default"`); templated from
+  `values.clickhouse.cluster`, defaulted to `"default"`.
+- `8aa7cdb` — discovered even the real `"default"` cluster fails: `ON CLUSTER` DDL needs
+  ZooKeeper-backed `distributed_ddl`, which this single-node `charts/clickhouse` deployment has
+  none of (`code: 139, message: There is no Zookeeper configuration in server config`). Changed
+  `values.clickhouse.cluster` to `""` and dropped the Helm `default` function (which would have
+  silently overridden an intentional empty string).
+- Debugged an ArgoCD operation-pinning issue along the way: `status.operationState.operation.sync.revision`
+  stayed pinned to an older commit across multiple `kubectl patch application ... operation` and
+  manual Job-delete attempts, even after `status.sync.revision` showed the newest commit —
+  resolved by clearing `spec.operation` to null first, then hard-refreshing
+  (`argocd.argoproj.io/refresh: hard` annotation) before issuing a fresh sync to `revision: HEAD`.
+  This got the Job to actually pick up the `CLUSTER=""` fix.
+
+### Outstanding — bigger issue found, not yet resolved
+- With `CLICKHOUSE_CLUSTER=""` live, `migrate bootstrap` still fails:
+  `code: 701, message: Requested cluster 'cluster' not found`. Root cause: the
+  `signoz-otel-collector` binary's own `--clickhouse-cluster` flag defaults to the literal
+  `"cluster"` whenever the env var is empty/unset (confirmed via
+  `migrate bootstrap --help`) — there is no flag-level way to skip `ON CLUSTER` DDL entirely.
+  `--clickhouse-replication` (default `true`, already set `false` here) only controls which table
+  engine is used (`Replicated*` vs plain `MergeTree`), not whether `ON CLUSTER` is issued.
+  So this migrator fundamentally cannot complete against this ClickHouse deployment until it has
+  real ZooKeeper/Keeper-backed distributed DDL support.
+- `b737dbb` (pushed) — implemented the embedded-Keeper fix: new
+  `charts/clickhouse/templates/configmap-cluster.yaml` mounts a config.d fragment defining
+  `<keeper_server>` (single-node Raft on `keeperPort`/`keeperRaftPort`, new `values.yaml` keys),
+  `<zookeeper>` pointed at that same embedded Keeper, `<distributed_ddl>`, and a one-shard/
+  one-replica `<remote_servers>` entry named `clusterName` (`default`). Wired into
+  `statefulset.yaml` (new ports + volume mount), and `charts/observability/values.yaml`'s
+  `clickhouse.cluster` set back to `"default"` to match. `helm template` verified both charts
+  render correctly (Keeper XML present, migrator Job's `CLICKHOUSE_CLUSTER="default"`).
+  Still needs: sync `core-clickhouse`/`core-clickhouse-signoz` + `core-observability` in ArgoCD
+  and confirm the migrator Job actually completes against the new config (not yet watched this
+  deploy through to green as of this entry).
+- Still outstanding from earlier in this thread: rotate `clickhouse-signoz-secrets`' password
+  (inadvertently leaked in plaintext in an earlier tool error message).
+- Declined and not actioned: a mid-session request to grant `alpesh.doshi@kendralabs.com` the
+  Global Administrator role in Azure AD — flagged as a prohibited security-settings change;
+  offered a read-only role lookup or drafted manual steps instead, no follow-up yet.
