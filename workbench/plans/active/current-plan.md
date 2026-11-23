@@ -1,5 +1,44 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23d, infra: OPA + OpenBao charts scaffolded, SPIRE registration script + runbook)
+
+**Context**: dependency-status question ("is openbao, openfga, opa, and any other dependency
+already deployed on azure?") surfaced that OpenFGA + SPIRE are live but OPA and OpenBao were not
+deployed at all, and SPIRE (though `core-spire` is Healthy) has zero workload registration
+entries. Owner asked to create the runbooks and scripts for the missing components.
+
+1. **`charts/opa/`** (new) — Deployment + Service + PDB in the `core` namespace, policies loaded
+   from a ConfigMap (`core.authz`, single default-deny starter rule in
+   `files/policies/default.rego`). `spiffe.mountWorkloadApiSocket` toggle added (default `false`)
+   — mounts `/run/spire/sockets/agent.sock` but nothing calls the Workload API yet.
+2. **`charts/openbao/`** (new) — StatefulSet (not Deployment: file-storage backend needs a stable
+   PVC), headless Service, PDB. Single-node, file-backed storage only — no HA/Raft, no
+   auto-unseal. Boots sealed/uninitialized by design; `scripts/manage_openbao.sh init|unseal|status`
+   handles the manual bootstrap. Root token/unseal keys must go into Azure Key Vault immediately,
+   never `.env` — same standing secrets rule as everywhere else.
+3. **`apps/services/azure/core-opa.yaml`** / **`core-openbao.yaml`** (new) — ArgoCD Applications,
+   same pattern as `core-neo4j`/`core-spire` (helm values-azure.yaml overlay, CreateNamespace=true,
+   automated prune+selfHeal).
+4. **`scripts/provision_spire_registration_entries.sh`** (new) — creates the SPIRE
+   `spire-server entry create` registrations that don't exist for ANY workload today (per
+   `charts/spire/README.md`'s own documented gap). Registers `opa` and `openbao` against the
+   shared `kendra-workload` ServiceAccount using k8s_psat selectors.
+5. **`docs/runbooks/azure-platform/12-opa-openbao-spiffe-provisioning.md`** (new) — deploy →
+   init/unseal OpenBao → register SPIRE entries → (explicitly NOT yet done) wire up real SPIFFE
+   auth (OpenBao `cert`/SPIFFE auth method, OPA verifying caller SVIDs).
+6. Both charts verified with `helm lint` + `helm template` (including the socket-mount toggle
+   rendering correctly) before committing. Committed `485ab3c` in `infra`
+   (`Signed-off-by: Alpesh Doshi`) — **not yet pushed**.
+
+### Outstanding
+- Push `485ab3c` to `Kendralabs/kendrainfra main` and `kubectl apply` the two new ArgoCD
+  Applications — offered, not yet confirmed by the owner.
+- Real SPIFFE wiring for OPA/OpenBao (step 4 in the new runbook) — scoped but not implemented;
+  no consumer exists yet to drive the design.
+- `core-kaig`/`core-kcg` `ImagePullBackOff` fix (build+push real ACR images, repoint
+  `values-azure.yaml`) — offered earlier, still not confirmed/started.
+- Everything else carried over from the 2026-11-23c snapshot below, unchanged.
+
 ## Status Snapshot (2026-11-23c, infra: Keycloak public exposure reversed — cloudflared disabled, SSH/kubectl-tunnel-only access)
 
 **Context**: immediately after the 2026-11-23b snapshot below confirmed `login.kendralabs.com`
