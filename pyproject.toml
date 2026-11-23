@@ -37,9 +37,9 @@ dependencies = [
     # Dynamic agents are built on the upstream deepagents library.
     "deepagents==0.3.8",
     # MongoDB client for shared MongoDB collections (conversations, skills, audit)
-    "pymongo==4.15.5",
+    "pymongo==4.18.3",
     # MongoDB checkpoint saver for LangGraph persistence (dynamic agents)
-    "langgraph-checkpoint-mongodb==0.3.1",
+    "langgraph-checkpoint-mongodb==0.5.1",
     # Async MongoDB driver for MongoDB store
     "motor==3.7.1",
     # S3-compatible object storage client for audit log backend
@@ -99,4 +99,4 @@ url = "https://pypi.org/simple/"
 
 [tool.uv]
 override-dependencies = ["protobuf==5.29.6"]
-constraint-dependencies = ["pypdf==6.13.3"]
+constraint-dependencies = ["pypdf==6.21.4"]
