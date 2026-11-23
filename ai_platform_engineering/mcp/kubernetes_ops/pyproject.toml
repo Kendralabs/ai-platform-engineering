@@ -1,0 +1,30 @@
+[project]
+name = "mcp-kubernetes-ops"
+version = "0.1.0"
+description = "Kubernetes Ops MCP Server - kubectl-style pod/deployment control for customer AKS clusters"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "fastmcp==3.2.4",
+  "httpx==0.28.1",
+  "kubernetes==31.0.0",
+  "mcp==1.30.0",
+  "mcp-agent-auth", # gitleaks:allow - package name, not a credential
+  "pydantic==2.12.5",
+  "python-dotenv==1.2.2",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.0.3",
+  "pytest-asyncio==1.3.0",
+]
+
+[tool.uv]
+# Run from source (flat module layout: server.py at the project root). uv
+# installs only the dependencies, not this project as a package.
+package = false
+
+[tool.uv.sources]
+mcp-agent-auth = { path = "../common/mcp-auth", editable = true }

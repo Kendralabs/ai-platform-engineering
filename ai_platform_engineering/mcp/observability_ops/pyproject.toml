@@ -1,0 +1,38 @@
+# Copyright 2026 CNOE
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "mcp-observability-ops"
+version = "0.1.0"
+description = "Observability Ops MCP Server - read access to SigNoz query-service + the signoz ClickHouse database, plus guarded restart of unhealthy observability Deployments in Kubernetes"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "fastmcp==3.2.4",
+  "httpx==0.28.1",
+  "mcp==1.30.0",
+  "mcp-agent-auth", # gitleaks:allow - package name, not a credential
+  "pydantic==2.12.5",
+  "python-dotenv==1.2.2",
+  "clickhouse-connect==0.8.18",
+  "kubernetes==31.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.0.3",
+  "pytest-asyncio==1.5.0",
+  "ruff==0.12.11",
+]
+
+[tool.uv]
+# Run from source (flat module layout: server.py at the project root). uv
+# installs only the dependencies, not this project as a package.
+package = false
+
+[tool.uv.sources]
+mcp-agent-auth = { path = "../common/mcp-auth", editable = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
