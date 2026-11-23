@@ -60,6 +60,7 @@
     "webpack": "5.105.4",
     "webpack-dev-server": "5.2.5",
     "dompurify": "3.4.11",
-    "http-proxy-middleware": "3.0.7"
+    "http-proxy-middleware": "3.0.7",
+    "tinypool": "2.1.2"
   }
 }
