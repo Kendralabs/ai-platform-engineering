@@ -51,6 +51,24 @@ alerts) and split them across 4 subagents:
 - Re-check Dependabot alert counts after rescan lag clears to confirm this
   round's 10 packages flip to `state: fixed`.
 
+## Status Snapshot (2026-11-23l, infra/kiam: backend git-b25e99e deployed, Keycloak admin token working, JWKS & health 200 OK)
+
+**Goal**: Promote the fresh KIAM backend image with Keycloak client-credentials grant into `kendrainfra`, reconcile ArgoCD, and verify zero 401 errors on AKS.
+
+- **Image Promotion**: Updated `charts/kiam/values-azure.yaml` and `envs/prod/apps/kiam/values.yaml` in `Kendralabs/kendrainfra` to use `kendrakendralabsacr.azurecr.io/kiam-backend:git-b25e99e`. Pushed to `main` at commit `71c055e`.
+- **ArgoCD Reconciled**: Triggered hard refresh on `core-kiam`. `kiam-backend` rolled out successfully to pod `kiam-backend-8586d79d6b-stvz4` (1/1 Running, 0 restarts).
+- **Authentication & Database Clean**:
+  - `KeycloakService` initialized cleanly; admin token acquired via `kiam-identity-admin` client-credentials grant (eliminating legacy 401 `Invalid email or password` errors).
+  - OpenFGA authorization model `01M84RFWDBFGWH392R28NH99H2` written.
+  - Prisma database pool connected via SSL (`sslmode=require`).
+  - Offline access tightened on `kendra` realm.
+- **Endpoint Verification**:
+  - `GET /health`: HTTP 200 OK (`{"status":"ok"}`).
+  - `GET /api/auth/jwks`: HTTP 200 OK with active RS256 key (`kid: tp98LXYG9O-EvD4YzHSLXp-VcMnu_6PyUUI_KebH8Uc`).
+- **Next in Queue**:
+  - Cloud build for `kiam-frontend:git-b25e99e` running in ACR.
+  - In-cluster frontend toggle in `kendrainfra` values (`frontend.enabled: true`).
+
 ## Status Snapshot (2026-11-23j, infra: KIAM live deployment verified — Prisma migrations applied, SSL active, backend healthy)
 
 **Goal**: Complete live deployment and verification of KIAM on `kendra-kendralabs-aks` (namespace `core`) using centralized `kendrainfra` GitOps.
