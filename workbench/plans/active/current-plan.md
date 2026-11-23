@@ -2109,3 +2109,39 @@ Keycloak previously had no public exposure at all, only a ClusterIP Service).
   `https://login.kendralabs.com/realms/kendra/broker/microsoft/endpoint`, Graph delegated
   permissions, admin consent, 2-year client secret) — not yet run; was blocked on exactly this
   hostname existing, which is now resolved pending the ArgoCD sync above.
+
+## 2026-11-23o — KIAM live status check + corrected cloudflared finding
+
+**Goal**: answer "what's the status of KIAM deployment" and "check why cloudflared was
+disabled" by inspecting live state, not just this file's prior snapshot.
+
+- Checked ArgoCD `Application core-kiam` (`kubectl get application core-kiam -n argocd -o json`):
+  synced and healthy, `kiam-backend`/`kiam-frontend`/`kiam-backend-python`/`kiam-keycloak` all
+  running in `kendra-kendralabs-aks`, namespace `core`.
+- Initial assumption from `git merge-base --is-ancestor` alone (cloudflared commit present in
+  the synced revision ⇒ sidecar should be live) was **wrong** — corrected by actually checking
+  the running Deployment: `kubectl get deployment kiam-keycloak -n core -o jsonpath=
+  '{.spec.template.spec.containers[*].name}'` shows only `keycloak`, no `cloudflared` container.
+- Root cause (in `~/Software/infra`, `git log -p --all -S"enabled: false" --
+  charts/kiam/values-azure.yaml`): commit `d0ac859` **"fix(kiam): disable public Cloudflare
+  Tunnel for Keycloak"**, dated 2026-11-23, sets `cloudflared.enabled: false`. This supersedes
+  the 2026-11-22e entry above and is a **deliberate owner security decision**, not a stalled
+  sync: Keycloak must not be publicly reachable; access is restricted to SSH tunnel /
+  `kubectl port-forward` only. `hostnameUrl: "https://login.kendralabs.com"` was deliberately
+  kept (not reverted) so the realm issuer/redirect URIs stay stable if public access is ever
+  re-enabled.
+- This changes the status of the still-open Entra ID App Registration item below: it's now
+  blocked on needing an SSH-tunnel/port-forward access path instead of a public redirect URI,
+  not on ArgoCD sync.
+
+### Outstanding (supersedes the 2026-11-22e "Outstanding" entries above)
+- Cloudflare dashboard route for `login.kendralabs.com` still needs manual removal (no API for
+  tunnel-route deletion).
+- DNS CNAME for `login.kendralabs.com` (and the earlier stale `keycloak.kendralabs.com` one)
+  still need manual removal.
+- Key Vault secret `kiam-keycloak-cloudflare-tunnel-token` is now unused.
+- Entra ID App Registration: redirect URI approach needs rethinking around the SSH-tunnel/
+  port-forward-only access path — not yet started.
+- Leftover git stash in `/Users/alpesh/Software/caipe` (`stash@{0}`, "infra-ops-mcp untracked
+  agents") remains un-dropped — auto-mode classifier blocked `git stash drop`; harmless, content
+  already verified identical to what's committed on `prebuild/feat/infra-ops-mcp-local`.
