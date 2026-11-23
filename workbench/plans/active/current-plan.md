@@ -2219,8 +2219,11 @@ asked to check two unrelated pods stuck in `ImagePullBackOff` (`kcg`, `kendra-ai
   `git merge --no-ff origin/main` (clean, no conflicts — different files), then pushed the merge
   commit `fc265c7` to `Kendralabs/kendrainfra` main.
 
+- **Verified post-sync**: `core-kaig` Synced at `fc265c7`, Healthy, operation finished
+  2026-11-23T22:34:40Z (no longer stale). `kendra-ai-gateway` Deployment shows `0` desired
+  replicas, no HPA present, no pods running. Both `kcg` and `kendra-ai-gateway` are now fully
+  scaled to 0 with the `ImagePullBackOff` churn stopped.
+
 ### Outstanding
-- Confirm ArgoCD re-syncs `core-kaig` on `fc265c7` and the `kendra-ai-gateway` Deployment actually
-  drops to 0 replicas / HPA disappears (mirror the `kcg` verification).
 - Same longer-term items as 2026-11-23p: real images/CI needed for both `kcg` and
   `kendra-ai-gateway` before either override can be removed.
