@@ -19,7 +19,7 @@ dependencies = [
     "mcp==1.28.1",
     "prometheus-client==0.23.1",
     "pydantic==2.12.5",
-    "pyjwt==2.13.0",
+    "pyjwt==2.15.0",
     "pymongo==4.15.5",
     "python-dotenv==1.2.2",
     "beautifulsoup4==4.14.3",

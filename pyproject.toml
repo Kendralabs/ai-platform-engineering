@@ -32,7 +32,7 @@ dependencies = [
     "prometheus-client==0.23.1",
     "pydantic==2.12.5",
     "pydantic-core==2.41.5",
-    "pyjwt==2.13.0",
+    "pyjwt==2.15.0",
     "requests==2.33.0",
     # Dynamic agents are built on the upstream deepagents library.
     "deepagents==0.3.8",
