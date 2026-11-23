@@ -2145,3 +2145,50 @@ disabled" by inspecting live state, not just this file's prior snapshot.
 - Leftover git stash in `/Users/alpesh/Software/caipe` (`stash@{0}`, "infra-ops-mcp untracked
   agents") remains un-dropped — auto-mode classifier blocked `git stash drop`; harmless, content
   already verified identical to what's committed on `prebuild/feat/infra-ops-mcp-local`.
+
+## 2026-11-23p — `core` namespace sweep: kiam-dev Jenkins agents, kcg/kaig ImagePullBackOff fix
+
+**Goal**: user asked to check the `kiam-dev-*` pods churning in `core` alongside KIAM, then
+asked to check two unrelated pods stuck in `ImagePullBackOff` (`kcg`, `kendra-ai-gateway`).
+
+- `kiam-dev-*` pods are **not** KIAM app pods — they're dynamically-provisioned Jenkins
+  Kubernetes build agents (`jenkins/label: kiam_dev_N-...`, containers `node`/`azure-cli`/`jnlp`,
+  owned by the in-namespace `jenkins` Deployment). Normal CI agent churn, no action needed.
+- `kcg` (ArgoCD app `core-kcg` → `kendrainfra` `charts/kcg`, `values-azure.yaml`) and
+  `kendra-ai-gateway` (ArgoCD app `core-kaig` → `charts/kendra-ai-gateway`) were both stuck in
+  `ImagePullBackOff` for 22-23h, both `automated`/`selfHeal` so endlessly recreating broken pods.
+  Root cause for each (verified via `gh api` against `Kendralabs/kcg` and `Kendralabs/aigateway`,
+  not just assumed):
+  - `kcg`: chart default `image.repository: kendralabs/kcg` points at Docker Hub, but the repo's
+    own `docker.yml` actually builds to **GHCR** (`ghcr.io/Kendralabs/kcg`) — and only on a
+    `v*.*.*` tag push or manual dispatch, neither of which has ever happened. No image exists at
+    either location (`orgs/Kendralabs/packages/container/kcg` returns 404).
+  - `kendra-ai-gateway`: chart default `kendra/ai-gateway:latest` doesn't exist on Docker Hub.
+    The chart's actual source is `kendrainfra/apps/ai-gateway/` (a small Python app — cache.py,
+    router.py, masker.py) which has **no Dockerfile and no CI/build pipeline at all**. The
+    similarly-named `Kendralabs/aigateway` repo is an unrelated fork that publishes its own
+    `gateway` image to Docker Hub under its own org secret — not the source for this chart.
+  - Conclusion: not a registry misconfiguration fixable by changing a string — both apps are
+    genuinely unfinished (no image published anywhere for either).
+- **Fix applied** (not an image rebuild — stopping the churn safely until one exists): added
+  `replicaCount: 0` to both `charts/kcg/values-azure.yaml` and
+  `charts/kendra-ai-gateway/values-azure.yaml` in `kendrainfra`, each with a comment explaining
+  why and what needs to happen to re-enable. Committed (`796136f`, human DCO
+  `Alpesh Doshi <alpesh.doshi@kendralabs.com>`) and pushed to `Kendralabs/kendrainfra` main
+  (`362631d..796136f`) — only those two files touched; left the repo's large amount of unrelated
+  pre-existing modified/untracked files untouched.
+
+### Outstanding
+- `kcg`: needs a `v*.*.*` tag push or manual `workflow_dispatch` with `push=true` on
+  `Kendralabs/kcg` to actually publish a GHCR image, then `values-azure.yaml` needs
+  `image.repository: ghcr.io/kendralabs/kcg` (lowercase) + a real tag and `replicaCount`
+  restored (currently `1` in base `values.yaml`).
+  - **Caveat**: this session ran local to `/Users/alpesh/Software/caipe`/`~/Software/infra`,
+    which are separate from the `Kendralabs/kcg` repo backing this app — no changes to that repo
+    were made or attempted here.
+- `kendra-ai-gateway`: needs a Dockerfile + build/publish workflow created for
+  `kendrainfra/apps/ai-gateway/` from scratch before any image can exist, then
+  `values-azure.yaml` needs the real `image.repository`/`tag` + `replicaCount` restored
+  (currently `2` in base `values.yaml`).
+- Once ArgoCD syncs the `796136f` commit, confirm both Deployments actually scale to 0 and the
+  `ImagePullBackOff` pods stop being recreated.
