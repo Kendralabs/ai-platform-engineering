@@ -1,5 +1,57 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23i, caipe: certifi/anyio/authlib/next-auth/proxy-addr/shell-quote CVE remediation pushed)
+
+**Goal**: Continuing the Dependabot critical-alert remediation (started at 1887 open
+alerts; Round 1 fixed PyJWT+Next.js, Round 2 fixed tinypool/uv/sentence-transformers/
+python-jose). After Round 2, 77 open critical alerts remained, concentrated in 6
+packages: `certifi` (pip, 30), `anyio` (pip, 27), `authlib` (pip, 17), `next-auth`
+(npm, 1), `proxy-addr` (npm, 1), `shell-quote` (npm, 1).
+
+- `certifi`/`anyio`/`authlib` were all transitive-only (pulled in via shared internal
+  packages like `mcp-auth`/`utils`/`common`), never direct pins — fixed by running
+  `uv lock --upgrade-package certifi --upgrade-package anyio --upgrade-package authlib`
+  across all 29 affected Python projects (root `uv.lock` plus every `ai_platform_
+  engineering/mcp/*`, `rag/*`, `integrations/*`, `scheduler`, `utils`,
+  `deploy/openfga/bridge`) — each resolved cleanly to certifi 2026.11.20,
+  anyio 4.14.2/4.16.0, authlib 1.9.10 (where present).
+- `next-auth` was a direct pin in `ui/package.json` (4.24.13 → 4.24.15, email-
+  normalizer homoglyph-bypass advisory); bumped directly and re-ran `npm install`.
+- `proxy-addr` and `shell-quote` were transitive-only in `docs/package-lock.json`
+  (IP-spoofing and command-injection advisories); added to `docs/package.json`'s
+  existing `overrides` block (same precedent used for `tinypool` in Round 2) —
+  `proxy-addr` 2.0.8, `shell-quote` 1.11.0.
+- Ran quality gates per CLAUDE.md: `uv run ruff check`/`pytest` per touched Python
+  project (`rag/server` pytest: 185 passed/14 skipped, unchanged from Round 2;
+  several `mcp/*` projects have no `ruff`/dev group defined at all and errored with
+  "Failed to spawn: ruff" — confirmed pre-existing, unrelated to this change, since
+  only `uv.lock` was touched there, not `pyproject.toml`); `docs/`'s `npm run build`
+  succeeded with the same pre-existing broken-anchor warnings as Round 1/2;
+  `ui/`'s `npm run lint` showed the same pre-existing 9 `react-hooks/rules-of-hooks`
+  errors in `auth-guard.tsx`, and `npm run build` succeeded cleanly.
+- Committed (`30fca55e7`, no invented DCO per repo policy) and **pushed to `origin`
+  (`Kendralabs/ai-platform-engineering`) main only** — `fc501ea53..30fca55e7`.
+  Never pushes to `upstream` (`caipe-io/ai-platform-engineering`); standing rule,
+  reinforced explicitly this session.
+- Staged only the 34 touched files (29 `uv.lock` files + `docs/package.json` +
+  `docs/package-lock.json` + `ui/package.json` + `ui/package-lock.json`) — left all
+  pre-existing unrelated uncommitted/untracked clutter in the working tree
+  completely untouched.
+- GitHub's post-push rescan still showed the pre-push count (1399 total/77
+  critical) in the push output itself — expected async rescan lag, not a failure
+  (confirmed this pattern in Round 2: alerts flip to `fixed` with a delay after
+  the lockfile fix is verified locally). Not yet independently re-confirmed via a
+  follow-up `gh api` check in this window.
+
+### Outstanding
+- Re-check Dependabot alert counts after rescan lag clears, to confirm all 6
+  packages' alerts flip to `state: fixed` (expect critical count to drop toward 0,
+  modulo any new alerts surfacing in the interim).
+- The remaining ~571 high / ~676 moderate / ~75 low alerts are still completely
+  untriaged by package — not yet scoped, and not to be acted on without further
+  explicit instruction (user has so far only asked for critical-severity work,
+  specifically-named packages each round).
+
 ## Status Snapshot (2026-11-23h, infra: KIAM deployment audit — PostgreSQL SSL fix, migration job hook, probes, in-cluster frontend)
 
 **Context**: Comprehensive audit of `kendrainfra` (`~/Software/infra/charts/kiam`) against live AKS cluster `kendra-kendralabs-aks` (core namespace) and `kiam` deployment specification.
