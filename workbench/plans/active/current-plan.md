@@ -1,5 +1,71 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23e, kiam: Jenkins CI/CD pipeline, GitOps promotion manifests, frontend fixes, and deployment readiness)
+
+**Context**: Handoff from KIAM project to CAIPE (which manages the infrastructure deployment).
+Provides the complete file inventory, CI/CD pipeline specification, Helm/ArgoCD GitOps configurations,
+Azure cluster & Key Vault live posture, and operational deployment steps to rollout KIAM onto Azure.
+
+1. **KIAM Monorepo Updates (`/Users/alpesh/Software/kiam/kiam`, committed & pushed `a0a7796` to `main`)**:
+   - **`Jenkinsfile`** (multi-stage CI/CD):
+     - Stages: Parallel Unit Tests (`@kiam/shared`, `@kiam/backend`, `backend-python`), Multi-container Docker Build (`kiam-backend`, `kiam-backend-python`, `kiam-keycloak`), Trivy vulnerability scanner (`CRITICAL` check), ACR publishing to `kendrakendralabsacr.azurecr.io` with semantic Git SHA tags (`git-${GIT_COMMIT[0..7]}`).
+     - Automated promotion to `dev` environment (`envs/dev/apps/kiam/values.yaml` in `kendrainfra`).
+     - Manual approval promotion gate requiring `alpesh.doshi@kendralabs.com` to promote to `staging` (`envs/staging/apps/kiam/values.yaml`) and `prod` (`envs/prod/apps/kiam/values.yaml` & `charts/kiam/values-azure.yaml`).
+     - Strictly respects GitOps boundary: Jenkins never calls `kubectl` or `helm`; all deployment triggers are committed back to `kendrainfra` repository.
+   - **Frontend & Design System Fixes**:
+     - Synchronized `@kendralabs/kds-*` packages into `/Users/alpesh/Software/kiam/kendrastorybook`.
+     - Configured import aliases in `apps/frontend/vite.config.ts` for `@kendralabs/kds-*`, `clsx`, and `tailwind-merge`.
+     - Headless browser verified: 0 console/page errors across `/admin`, `/admin/agents`, `/admin/tenancy`, `/admin/obo`, and `/onboarding`.
+   - **Backend Realm Resolution**:
+     - Updated `offlineAccess.ts`, `kendraUserId.ts`, and `keycloakIdpAdmin.ts` to dynamically resolve `process.env.KEYCLOAK_REALM || 'kiam'` (allowing flexible runtime binding to `kendra` realm in Azure).
+
+2. **Infrastructure & GitOps Manifests (`/Users/alpesh/Software/infra`, committed & pushed `43d0231` to `main`)**:
+   - **Environment Helm Overlays**:
+     - Dev: `envs/dev/apps/kiam/values.yaml` (targets `kendra-dev-aks` in `kendra-dev-rg`, namespace `dev`, replicas: 1, `publicIngress: false`).
+     - Staging: `envs/staging/apps/kiam/values.yaml` (targets `kendra-kendralabs-aks`, namespace `staging`, replicas: 1).
+     - Prod: `envs/prod/apps/kiam/values.yaml` & `charts/kiam/values-azure.yaml` (targets `kendra-kendralabs-aks`, namespace `core`, replicas: 2 with PDB and Key Vault CSI driver).
+   - **ArgoCD Application Manifests**:
+     - `apps/kiam/kiam-dev.yaml` (points to `envs/dev/apps/kiam/values.yaml`, cluster: `kendra-dev-aks`).
+     - `apps/kiam/kiam-staging.yaml` (points to `envs/staging/apps/kiam/values.yaml`, cluster: `kendra-kendralabs-aks`).
+     - `apps/kiam/kiam-prod.yaml` & `apps/services/azure/core-kiam.yaml` (points to `envs/prod/apps/kiam/values.yaml` & `charts/kiam/values-azure.yaml`, cluster: `kendra-kendralabs-aks`).
+
+3. **Live Azure Infrastructure Posture (`Kendra Platform` / `c53f4750-141e-4653-b484-0ca2774bca63`)**:
+   - **Primary AKS (`kendra-kendralabs-aks` in `kendra-kendralabs-rg`, Sweden Central)**:
+     - State: `Running` (`provisioningState: Succeeded`).
+     - Node Pools: `default` (System), `user`, `jenkins` (D4s_v5), `jenkinsagent` (D4s_v5).
+     - Workload Identity: `kendra-kendralabs-workload-identity` (`88aeecff-fcf5-471c-89d7-1fb8774ee85e`) with federated credentials mapped to `system:serviceaccount:core:kendra-workload` and `system:serviceaccount:core:jenkins-workload`.
+   - **Dev AKS (`kendra-dev-aks` in `kendra-dev-rg`, East US)**:
+     - State: `Stopped` (to start: `az aks start -g kendra-dev-rg -n kendra-dev-aks`).
+   - **Azure PostgreSQL Flexible Server**:
+     - FQDN: `kendra-kendralabs-pg.postgres.database.azure.com` (Ready, private VNet integration).
+   - **Azure Container Registry**:
+     - Login Server: `kendrakendralabsacr.azurecr.io` (Active).
+     - Existing live repositories: `jenkins-controller`, `kiam-backend`, `kiam-backend-python`, `kiam-keycloak`.
+   - **Azure Key Vault (`kendra-kendralabs-kv`)**:
+     - Status: `publicNetworkAccess: Disabled`. Connected via Private Endpoint `kendra-kendralabs-kv-pe`.
+     - In-cluster workloads access secrets strictly via Azure Key Vault Secrets Store CSI Driver.
+   - **Keycloak Hostname & Access Security**:
+     - Keycloak in Azure is intentionally private (`cloudflared.enabled: false` per 2026-11-23c decision). Reached only via `kubectl port-forward` into cluster or internal mesh.
+
+4. **Deployment Handoff & Execution Steps for CAIPE**:
+   - **Step 1: In-VNet Secret Ingestion (Prerequisite)**:
+     - Follow `docs/runbooks/azure-platform/04b-kiam-identity-admin-vault-provisioning.md` using the ephemeral pod pattern to populate `kendra-kendralabs-kv`:
+       - `keycloak-client-secret`, `keycloak-admin-password`
+       - `database-user`, `database-password`
+       - `jwt-secret`, `openfga-preshared-key`
+       - `jwk-private-key` (generate via `pnpm --filter @kiam/backend run ops:jwk-keygen` per `05-kiam-jwk-signing-key.md`).
+   - **Step 2: Jenkins Build Execution**:
+     - Trigger the `kiam` multibranch pipeline in Jenkins. Builds immutable tag `git-a0a7796`, runs Trivy scan, pushes to `kendrakendralabsacr.azurecr.io`, and auto-commits the new tag to `kendrainfra`.
+   - **Step 3: ArgoCD Synchronization**:
+     - For Dev: `kubectl apply -f apps/kiam/kiam-dev.yaml` (ensure `kendra-dev-aks` is started).
+     - For Staging / Prod: Ensure `apps/services/azure/core-kiam.yaml` (or `apps/kiam/kiam-prod.yaml`) is synced in ArgoCD on `kendra-kendralabs-aks`.
+     - Verify SecretProviderClass mounts secrets and pods transition to `2/2 Running`.
+
+### Outstanding
+- Run Step 1 (in-VNet ephemeral pod secret insertion) for `kendra-kendralabs-kv`.
+- Trigger first Jenkins CI run on `kiam` job.
+- ArgoCD sync verification.
+
 ## Status Snapshot (2026-11-23d, infra: OPA + OpenBao charts scaffolded, SPIRE registration script + runbook)
 
 **Context**: dependency-status question ("is openbao, openfga, opa, and any other dependency
