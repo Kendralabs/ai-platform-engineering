@@ -1,5 +1,49 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23g, caipe: PyJWT + Next.js CVE remediation pushed)
+
+**Goal**: GitHub surfaced 1887 open Dependabot alerts (122 critical, 773 high, 916 moderate,
+76 low) on `Kendralabs/ai-platform-engineering` main. Scoped critical alerts by package and
+found two root causes covering most of them: `PyJWT==2.13.0` (GHSA-42vr-xj54-vc7v,
+unauthenticated RecursionError DoS) pinned across ~10 `pyproject.toml` files and pulled
+transitively into ~22 more lockfiles via the shared `mcp-auth`/`utils` internal packages, and
+`next==16.2.11` in `ui/` (16 advisories, several RCE-class).
+
+- Bumped PyJWT to 2.15.0+ in all direct-pin `pyproject.toml` files (root, `deploy/openfga/
+  bridge`, `dynamic_agents`, `rag/ingestors`, `rag/server`, `scheduler`, `utils`, `mcp/
+  common/mcp-auth`, `integrations/webex_bot`, `integrations/slack_bot`) and re-ran `uv lock`
+  in each; regenerated the 22 transitive-only `mcp/*` agent lockfiles (3 of them needed
+  `uv lock --upgrade-package pyjwt` since a plain `uv lock` didn't pick up the bump).
+- Bumped `next` to 16.4.5 in `ui/package.json` via `npm install next@16.4.5`, regenerating
+  `ui/package-lock.json`.
+- Ran quality gates per CLAUDE.md (`uv run ruff check`/`pytest` per Python project,
+  `npm run lint`/`build` in `ui/`). Used `git stash` to compare against clean `main` and
+  confirmed these pre-existing failures are unrelated to this change: 9 `react-hooks/
+  rules-of-hooks` lint errors in `ui/src/components/auth-guard.tsx`; a root `ruff` F541 in
+  `ai_platform_engineering/mcp/jenkins_ci_ops/tools/keyvault_ops.py`; 10 `rag/ingestors`
+  pytest failures (env/URL-parsing/TLS, unrelated to PyJWT). `rag/server` pytest: 185
+  passed, 14 skipped, no issues. `dynamic_agents`'s 5 pytest failures were judged very
+  likely pre-existing (unrelated subject matter — Bedrock/botocore config, Mongo
+  credential-source self-heal) but not independently re-verified against clean `main`, since
+  a separate pre-existing collection error (`cnoe_agent_utils.llm_factory` module not found)
+  blocked the targeted stash-comparison re-run.
+- Committed (`9b7a03f9c`, no invented DCO per repo policy) and **pushed to `origin`
+  (`Kendralabs/ai-platform-engineering`) main only** — `10e641b33..9b7a03f9c`. Never pushes to
+  `upstream` (`caipe-io/ai-platform-engineering`); that remote is read-only for this work per
+  standing instruction.
+- Left the repo's large amount of pre-existing unrelated uncommitted/untracked clutter
+  (`.specify`/`.cursor`/`.github` deletions, `jenkins_ci_ops`/`kubernetes_ops`/
+  `observability_ops` untracked dirs, modified `docker-compose.yaml`, etc.) completely
+  untouched — staged and committed only the 45 files that are part of this dependency bump.
+
+### Outstanding
+- Deferred by design (per the chosen remediation option): smaller individual critical alerts
+  — `tinypool` (docs, npm), `uv` (pip), `sentence-transformers` (pip, `rag/server`),
+  `python-jose` (pip, `rag/server`) — plus the full remaining high/moderate/low backlog,
+  not yet individually triaged.
+- GitHub's Dependabot alert count will take some time to re-scan and reflect this fix; not
+  independently confirmed closed yet.
+
 ## Status Snapshot (2026-11-23f, kiam/infra: CI script centralization, deployment-spec convention noted)
 
 **Context**: Continuation of the 2026-11-23e KIAM handoff below. Investigated the KIAM
