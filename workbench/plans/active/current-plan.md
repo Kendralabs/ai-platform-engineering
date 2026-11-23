@@ -1,5 +1,63 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23n, caipe: working-tree repair + OpenBao/infra-agent commits pushed)
+
+**What happened**: `/Users/alpesh/Software/caipe` was discovered to have 276
+working-tree changes — root cause was an incomplete copy from
+`/Volumes/alpesh/Software/caipe` (the source) that silently dropped
+dot-prefixed directories/files (`.github`, `.claude/skills`, `.cursor`,
+`.specify`, `.agents`, `.gitattributes`, `.gitleaksignore`, `.env`, etc.).
+Confirmed via `git ls-tree`/`git log -- <path>` that nothing was ever
+`git rm`'d — purely a filesystem-level gap, fully recoverable.
+
+- Restored all 146 git-tracked-but-missing paths via
+  `git checkout HEAD -- <paths>` (two passes — `.github`/`.claude/skills`/
+  `.cursor`/`.specify`/`.gitattributes`/`.gitleaksignore` first, then
+  `.agents/skills`/`.cursorrules`/`.dockerignore`/`.env.example`/
+  `.gitignore`/`.opencode/package-lock.json`/`branding/kendra-*.svg`).
+- Copied `.env` as-is from the volume (not git-tracked, real secrets,
+  explicit user instruction to copy verbatim rather than route through
+  KIAM/OpenBao for this restore).
+- Found and deleted `test_llm.py` — an untracked scratch file with a
+  hardcoded live NVIDIA API key; never committed, so no history to purge.
+- Triaged remaining untracked clutter: left `test-login.mjs`,
+  `start-caipe.sh`, `fake-bin/` (docker->podman shim) as personal
+  local-dev scratch, not committed.
+- Split the real pending work into 3 commits by area:
+  1. `main` `5f4a941a7` — OpenBao-backed credential exchange
+     (`credential_client.py` for all 4 Azure MCP agents, `openbao-store.ts`
+     + `payload-store-factory.ts` in UI credentials lib, dynamic_agents
+     config, agentgateway config, docker-compose, Keycloak realm config,
+     OpenBao spec docs). Pushed `origin/main` `ad0e72d24..572d7fae8`
+     (bundled with commit 3 below in the same push).
+  2. `prebuild/feat/infra-ops-mcp` (local branch `-local` suffix, same
+     remote branch) `6e10a7b04` — new `kubernetes_ops` + `observability_ops`
+     MCP agent scaffolds (pod/deployment read+guarded-write tools,
+     SigNoz/ClickHouse read tools + guarded restart), implementing the
+     remaining steps of `/Users/alpesh/.claude/plans/glistening-cooking-aho.md`.
+     Not yet wired into compose/helm/dynamic_agents config; not verified
+     live against AKS/SigNoz. Pushed `origin` `36e583a37..6e10a7b04`
+     (updates existing branch / likely PR #7).
+  3. `main` `572d7fae8` — `ONBOARDING.md`, `docs/models/gemma-4-e2b.md`,
+     `woodpecker-ci-onboarding-for-projects.md`.
+  - All 3 commits carry explicit human DCO `Signed-off-by: Alpesh Doshi
+    <alpesh.doshi@kendralabs.com>`, provided by user on request (no
+    invented sign-off, per repo policy).
+  - Pushed to **`origin` (`Kendralabs/ai-platform-engineering`) only** —
+    never `upstream` (`caipe-io/ai-platform-engineering`).
+
+### Outstanding (carried over, unchanged by this session)
+- `kubernetes_ops`/`observability_ops`: still needs compose/helm/
+  `dynamic_agents` config.yaml wiring, `uv run ruff check`/`pytest`,
+  live `MCP_MODE=STDIO` verification against real AKS/SigNoz, end-to-end
+  chat test — per the plan's own verification section, none of this has
+  been done yet.
+- `jenkins_ci_ops` (PR #7) — unchanged this session, still needs the
+  compose/helm/config.yaml wiring step from the same plan.
+- Prior outstanding CVE-remediation items (dynamic_agents version drift:
+  urllib3/pyasn1/mcp/dnspython; ~109 untriaged high-severity packages;
+  ~256 medium / ~46 low alerts) — not touched this session.
+
 ## Status Snapshot (2026-11-23k, caipe: critical backlog fully cleared; high-severity round 4 pushed)
 
 **Goal**: Continuing Dependabot remediation after Round 3 (certifi/anyio/authlib/
