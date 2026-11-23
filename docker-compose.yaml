@@ -36,7 +36,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,7 +58,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,7 +96,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -119,7 +119,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -140,7 +140,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -191,7 +191,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -213,7 +213,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -236,7 +236,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -264,7 +264,7 @@ services:
       - INFRA_OPS_SSH_USER=${INFRA_OPS_SSH_USER:-}
       - INFRA_OPS_SSH_KEY_PATH=/run/secrets/infra_ops_ssh_key
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -296,7 +296,21 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_POWER_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_POWER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_POWER_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_power_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_POWER_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_POWER_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_POWER_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_POWER_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_POWER_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_POWER_OPS_ARM_CLIENT_SECRET_REF:-azure-power-ops/arm-client-secret}
     healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
       test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
@@ -330,7 +344,21 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_COST_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_COST_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_COST_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_cost_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_COST_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_COST_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_COST_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_COST_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_COST_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_COST_OPS_ARM_CLIENT_SECRET_REF:-azure-cost-ops/arm-client-secret}
     healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
       test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
@@ -364,7 +392,21 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_CLUSTER_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CLUSTER_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_cluster_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_CLUSTER_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_CLUSTER_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_CLUSTER_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_CLUSTER_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_CLUSTER_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET_REF:-azure-cluster-ops/arm-client-secret}
     healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
       test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
@@ -399,7 +441,21 @@ services:
       - ARM_CLIENT_SECRET=${AZURE_CORE_SERVICES_OPS_ARM_CLIENT_SECRET:-}
       - ARM_TENANT_ID=${AZURE_CORE_SERVICES_OPS_ARM_TENANT_ID:-}
       - ARM_SUBSCRIPTION_ID=${AZURE_CORE_SERVICES_OPS_ARM_SUBSCRIPTION_ID:-}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/azure_core_services_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${AZURE_CORE_SERVICES_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${AZURE_CORE_SERVICES_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${AZURE_CORE_SERVICES_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${AZURE_CORE_SERVICES_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${AZURE_CORE_SERVICES_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${AZURE_CORE_SERVICES_OPS_ARM_CLIENT_SECRET_REF:-azure-core-services-ops/arm-client-secret}
     healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
       test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
       interval: 10s
       timeout: 5s
@@ -413,6 +469,168 @@ services:
     # `azure-core-services-ops-agent` profile.
     profiles:
       - azure-core-services-ops-agent
+
+  mcp-jenkins-ci-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-jenkins_ci_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-jenkins-ci-ops
+    env_file: [.env]
+    ports: ["18021:8000"]
+    volumes:
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${JENKINS_CI_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - JENKINS_CI_OPS_INFRA_REPO_PATH=/infra-repo
+      - ARM_CLIENT_ID=${JENKINS_CI_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${JENKINS_CI_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${JENKINS_CI_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${JENKINS_CI_OPS_ARM_SUBSCRIPTION_ID:-}
+      - JENKINS_URL=${JENKINS_CI_OPS_JENKINS_URL:-}
+      - JENKINS_USER=${JENKINS_CI_OPS_JENKINS_USER:-}
+      - JENKINS_API_TOKEN_REF=${JENKINS_CI_OPS_JENKINS_API_TOKEN_REF:-jenkins-ci-ops/api-token}
+      - JENKINS_CI_OPS_AZ_TIMEOUT=${JENKINS_CI_OPS_AZ_TIMEOUT:-120}
+      - JENKINS_CI_OPS_TERRAFORM_TIMEOUT=${JENKINS_CI_OPS_TERRAFORM_TIMEOUT:-300}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/jenkins_ci_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${JENKINS_CI_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${JENKINS_CI_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${JENKINS_CI_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${JENKINS_CI_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${JENKINS_CI_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${JENKINS_CI_OPS_ARM_CLIENT_SECRET_REF:-jenkins-ci-ops/arm-client-secret}
+    healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile, separate from the Azure agents: this server's eventual
+    # write tools (terraform_apply, etc.) carry their own blast radius
+    # and should be approvable independently. Enable explicitly with the
+    # `jenkins-ci-ops-agent` profile.
+    profiles:
+      - jenkins-ci-ops-agent
+
+  mcp-kubernetes-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-kubernetes_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-kubernetes-ops
+    env_file: [.env]
+    ports: ["18022:8000"]
+    volumes:
+      # Read-only: this server only discovers customer env names from
+      # envs/azure/*/terraform.tfvars+backend.hcl, never writes to this repo.
+      - ${KUBERNETES_OPS_INFRA_REPO_HOST_PATH:-/dev/null}:/infra-repo:ro
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - KUBERNETES_OPS_INFRA_REPO_PATH=/infra-repo
+      - ARM_CLIENT_ID=${KUBERNETES_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${KUBERNETES_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${KUBERNETES_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${KUBERNETES_OPS_ARM_SUBSCRIPTION_ID:-}
+      - KUBERNETES_OPS_TIMEOUT=${KUBERNETES_OPS_TIMEOUT:-60}
+      - KUBERNETES_OPS_AZ_LOGIN_TIMEOUT=${KUBERNETES_OPS_AZ_LOGIN_TIMEOUT:-120}
+      # Opt-in: resolve ARM_CLIENT_SECRET from CAIPE's OpenBao-backed
+      # credential-exchange API instead of the ARM_CLIENT_SECRET env var
+      # above. Requires a service-account Keycloak client provisioned via
+      # the existing service-accounts feature (ui/src/lib/service-accounts.ts)
+      # with access to the secret_ref below. See
+      # ai_platform_engineering/mcp/kubernetes_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${KUBERNETES_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${KUBERNETES_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${KUBERNETES_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${KUBERNETES_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${KUBERNETES_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${KUBERNETES_OPS_ARM_CLIENT_SECRET_REF:-kubernetes-ops/arm-client-secret}
+    healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile, separate from the Azure cluster/power agents and argocd:
+    # this server's write tools (restart/scale/delete) act directly on
+    # live workloads inside a cluster, a different blast radius than node
+    # pool scaling or an Application sync. Enable explicitly with the
+    # `kubernetes-ops-agent` profile.
+    profiles:
+      - kubernetes-ops-agent
+
+  mcp-observability-ops:
+    # Kendralabs-only agent: never published upstream by cnoe-io, so this
+    # pulls from this fork's own GHCR namespace/tag instead of IMAGE_TAG.
+    image: ghcr.io/kendralabs/mcp-observability_ops:${KENDRALABS_IMAGE_TAG:-latest}
+    container_name: mcp-observability-ops
+    env_file: [.env]
+    ports: ["18023:8000"]
+    environment:
+      - MCP_MODE=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - SIGNOZ_QUERY_SERVICE_URL=${OBSERVABILITY_OPS_SIGNOZ_QUERY_SERVICE_URL:-}
+      - OBSERVABILITY_OPS_HTTP_TIMEOUT=${OBSERVABILITY_OPS_HTTP_TIMEOUT:-30}
+      - CLICKHOUSE_HOST=${OBSERVABILITY_OPS_CLICKHOUSE_HOST:-clickhouse.observability}
+      - CLICKHOUSE_PORT=${OBSERVABILITY_OPS_CLICKHOUSE_PORT:-9000}
+      - CLICKHOUSE_DATABASE=${OBSERVABILITY_OPS_CLICKHOUSE_DATABASE:-signoz}
+      - CLICKHOUSE_USER=${OBSERVABILITY_OPS_CLICKHOUSE_USER:-signoz}
+      - CLICKHOUSE_PASSWORD=${OBSERVABILITY_OPS_CLICKHOUSE_PASSWORD:-}
+      - ARM_CLIENT_ID=${OBSERVABILITY_OPS_ARM_CLIENT_ID:-}
+      - ARM_CLIENT_SECRET=${OBSERVABILITY_OPS_ARM_CLIENT_SECRET:-}
+      - ARM_TENANT_ID=${OBSERVABILITY_OPS_ARM_TENANT_ID:-}
+      - ARM_SUBSCRIPTION_ID=${OBSERVABILITY_OPS_ARM_SUBSCRIPTION_ID:-}
+      - OBSERVABILITY_OPS_AKS_RESOURCE_GROUP=${OBSERVABILITY_OPS_AKS_RESOURCE_GROUP:-}
+      - OBSERVABILITY_OPS_AKS_CLUSTER_NAME=${OBSERVABILITY_OPS_AKS_CLUSTER_NAME:-}
+      - OBSERVABILITY_OPS_AZ_TIMEOUT=${OBSERVABILITY_OPS_AZ_TIMEOUT:-120}
+      # Opt-in: resolve ARM_CLIENT_SECRET/CLICKHOUSE_PASSWORD from CAIPE's
+      # OpenBao-backed credential-exchange API instead of the plain env
+      # vars above. Requires a service-account Keycloak client provisioned
+      # via the existing service-accounts feature
+      # (ui/src/lib/service-accounts.ts) with access to the secret_refs
+      # below. See
+      # ai_platform_engineering/mcp/observability_ops/tools/credential_client.py.
+      - CAIPE_CREDENTIALS_ENABLED=${OBSERVABILITY_OPS_CREDENTIALS_ENABLED:-false}
+      - CAIPE_CREDENTIAL_API_URL=${OBSERVABILITY_OPS_CREDENTIAL_API_URL:-http://caipe-ui:3000/api/credentials}
+      - KEYCLOAK_TOKEN_URL=${OBSERVABILITY_OPS_KEYCLOAK_TOKEN_URL:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_ID=${OBSERVABILITY_OPS_SERVICE_ACCOUNT_CLIENT_ID:-}
+      - CAIPE_SERVICE_ACCOUNT_CLIENT_SECRET=${OBSERVABILITY_OPS_SERVICE_ACCOUNT_CLIENT_SECRET:-}
+      - ARM_CLIENT_SECRET_REF=${OBSERVABILITY_OPS_ARM_CLIENT_SECRET_REF:-observability-ops/arm-client-secret}
+      - CLICKHOUSE_PASSWORD_REF=${OBSERVABILITY_OPS_CLICKHOUSE_PASSWORD_REF:-observability-ops/clickhouse-password}
+    healthcheck:
+      # CMD-SHELL (single string): the exec-array form was getting
+      # re-split on whitespace by the compose tooling on this host.
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(1); result=s.connect_ex(('localhost', 8000)); s.close(); exit(0 if result == 0 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    # Not part of the default `mcp-servers` bundle and kept in its own
+    # profile: this server's one write tool (restarting an observability
+    # Deployment) has a platform-wide blast radius, distinct from any
+    # customer-scoped Azure agent. Enable explicitly with the
+    # `observability-ops-agent` profile.
+    profiles:
+      - observability-ops-agent
 
   ####################################################################################################
   #                                      CAIPE UI & MongoDB                                          #
@@ -440,6 +658,30 @@ services:
     profiles:
       - caipe-mongodb
       - autonomous-agents
+
+  # OpenBao — credential-exchange secrets backend (requires --profile credentials)
+  openbao:
+    image: ghcr.io/openbao/openbao:2.1
+    container_name: openbao
+    ports:
+      - "${OPENBAO_HOST_PORT:-8200}:8200"
+    environment:
+      # Dev-mode server: in-memory storage, auto-unseal, fixed root token.
+      # Local/dev only — never use -dev mode against a real deployment.
+      - BAO_DEV_ROOT_TOKEN_ID=${OPENBAO_TOKEN:-caipe-dev-root-token}
+      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    command: ["server", "-dev"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8200/v1/sys/health?standbyok=true"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - credentials
 
   # MongoDB Admin UI (optional)
   caipe-ui-mongo-express:
@@ -558,7 +800,11 @@ services:
       # Connections & Secrets. Docker Compose reads provider bootstrap values
       # from .env; Kubernetes deployments use ESO to inject the same env names.
       - CAIPE_CREDENTIALS_ENABLED=${CAIPE_CREDENTIALS_ENABLED:-false}
-      - CREDENTIAL_STORE_BACKEND=${CREDENTIAL_STORE_BACKEND:-mongodb-envelope}
+      - CREDENTIAL_STORE_BACKEND=${CREDENTIAL_STORE_BACKEND:-openbao}
+      - OPENBAO_ADDR=${OPENBAO_ADDR:-http://openbao:8200}
+      - OPENBAO_TOKEN=${OPENBAO_TOKEN:-caipe-dev-root-token}
+      - OPENBAO_KV_MOUNT=${OPENBAO_KV_MOUNT:-secret}
+      - OPENBAO_CREDENTIALS_PATH_PREFIX=${OPENBAO_CREDENTIALS_PATH_PREFIX:-caipe/credentials}
       - CREDENTIAL_KEY_PROVIDER=${CREDENTIAL_KEY_PROVIDER:-local-cmk}
       - CREDENTIAL_KMS_CMK_ID=${CREDENTIAL_KMS_CMK_ID:-}
       - CREDENTIAL_KMS_REGION=${CREDENTIAL_KMS_REGION:-}
@@ -591,6 +837,9 @@ services:
     command: /app/entrypoint.sh
     depends_on:
       audit-service:
+        condition: service_healthy
+        required: false
+      openbao:
         condition: service_healthy
         required: false
     restart: unless-stopped
@@ -636,9 +885,11 @@ services:
     volumes:
       - audit_service_data:/var/lib/caipe-audit-service
     healthcheck:
-      # CMD-SHELL (single string): the exec-array form was getting
-      # re-split on whitespace by the compose tooling on this host.
-      test: ["CMD-SHELL", "python -c \"import json,urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8010/readyz',timeout=3); sys.exit(0 if r.status==200 and json.load(r).get('status')=='ready' else 1)\""]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json,urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8010/readyz',timeout=3); sys.exit(0 if r.status==200 and json.load(r).get('status')=='ready' else 1)"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1696,9 +1947,11 @@ services:
     ports:
       - "127.0.0.1:${OPENFGA_BRIDGE_PORT:-9100}:9100"
     healthcheck:
-      # CMD-SHELL (single string): the exec-array form was getting
-      # re-split on whitespace by the compose tooling on this host.
-      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('localhost', 9100), timeout=2).close()\""]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; socket.create_connection(('localhost', 9100), timeout=2).close()"
       interval: 5s
       timeout: 3s
       retries: 10
@@ -1725,7 +1978,6 @@ services:
       - rbac
     environment:
       AGENTGATEWAY_TARGETS_URL: ${AGENTGATEWAY_TARGETS_URL:-http://caipe-ui:3000/api/internal/agentgateway/mcp-targets}
-      AGENTGATEWAY_JWT_ISSUER: ${AGENTGATEWAY_JWT_ISSUER:-${OIDC_ISSUER:-http://localhost:7080/realms/caipe}}
       AGENTGATEWAY_TARGETS_TOKEN: ${AGENTGATEWAY_TARGETS_TOKEN:-agentgateway-config-bridge-dev-token}
       AGENTGATEWAY_CONFIG_PATH: /generated/config.yaml
       AGENTGATEWAY_BOOTSTRAP_CONFIG_PATH: /bootstrap/config.yaml
@@ -1739,24 +1991,21 @@ services:
     tmpfs:
       - /tmp
     healthcheck:
-      # CMD-SHELL (single string) rather than CMD exec-array: the exec-array
-      # form here was getting re-split on whitespace by the compose tooling
-      # on this host, turning this into a no-op "python -c import" and
-      # failing every single probe. See docker-compose.yaml git history.
       test:
-        - CMD-SHELL
+        - CMD
+        - python
+        - -c
         - |
-          python -c "
           from pathlib import Path
           import json
           import sys
           import yaml
 
-          config_path = Path(\"/generated/config.yaml\")
-          marker_path = Path(\"/generated/.reconcile_ok\")
+          config_path = Path("/generated/config.yaml")
+          marker_path = Path("/generated/.reconcile_ok")
           if not config_path.is_file() or config_path.stat().st_size <= 0 or not marker_path.is_file():
               sys.exit(1)
-          text = config_path.read_text(encoding=\"utf-8\")
+          text = config_path.read_text(encoding="utf-8")
           try:
               json.loads(text)
           except json.JSONDecodeError:
@@ -1767,7 +2016,6 @@ services:
               if not isinstance(parsed, dict):
                   sys.exit(1)
           sys.exit(0)
-          "
       interval: 5s
       timeout: 3s
       retries: 12

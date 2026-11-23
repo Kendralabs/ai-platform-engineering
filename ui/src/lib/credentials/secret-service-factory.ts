@@ -2,15 +2,12 @@ import { randomUUID } from "crypto";
 
 // assisted-by Codex Codex-sonnet-4-6
 
-import { KMSClient } from "@aws-sdk/client-kms";
-
 import { getCollection } from "@/lib/mongodb";
 import { listOpenFgaObjects } from "@/lib/rbac/openfga";
 import { requireResourcePermission,subjectFromSession,type ResourceAuthzSession } from "@/lib/rbac/resource-authz";
 
 import { CREDENTIAL_COLLECTIONS } from "./collections";
-import { createAwsKmsKeyWrapper,createDevLocalKeyWrapper,createLocalCmkKeyWrapper } from "./key-wrapper";
-import { MongoEnvelopeCredentialStore } from "./mongo-envelope-store";
+import { createConfiguredPayloadStore } from "./payload-store-factory";
 import {
 deleteAllSecretRefRelationships,
 deleteSecretRefShare,
@@ -37,31 +34,6 @@ const LLM_PROVIDER_NAMES: Record<string, string> = {
   "aws-bedrock": "AWS Bedrock",
   "google-genai": "Google Gemini",
 };
-
-function createConfiguredKeyWrapper() {
-  const keyProvider = process.env.CREDENTIAL_KEY_PROVIDER?.trim() || "local-cmk";
-  if (keyProvider === "aws-kms") {
-    return createAwsKmsKeyWrapper({
-      client: new KMSClient({ region: process.env.CREDENTIAL_KMS_REGION }),
-      cmkId: process.env.CREDENTIAL_KMS_CMK_ID || process.env.CREDENTIAL_KMS_KEY_ID || "",
-    });
-  }
-
-  if (keyProvider === "local-cmk") {
-    return createLocalCmkKeyWrapper({
-      cmkId: process.env.CREDENTIAL_KMS_CMK_ID || "alias/caipe-local-credentials",
-      nodeEnv: process.env.NODE_ENV,
-    });
-  }
-
-  return createDevLocalKeyWrapper({
-    masterKey:
-      process.env.CREDENTIAL_DEV_LOCAL_MASTER_KEY ||
-      process.env.CREDENTIAL_KMS_CMK_ID ||
-      "caipe-local-development-credential-key",
-    nodeEnv: process.env.NODE_ENV,
-  });
-}
 
 function llmProviderUsage(secret: SecretRefDocument): SecretUsageReference[] {
   const match = /^llm:([^:]+):(.+)$/.exec(secret.name);
@@ -138,16 +110,9 @@ export async function getCredentialSecretService(): Promise<SecretService> {
   const secretRefsCollection = await getCollection<SecretRefDocument>(
     CREDENTIAL_COLLECTIONS.secretRefs,
   );
-  const encryptedPayloadsCollection = await getCollection(
-    CREDENTIAL_COLLECTIONS.encryptedPayloads,
-  );
-
   return new SecretService({
     secretRefsCollection,
-    payloadStore: new MongoEnvelopeCredentialStore({
-      payloadCollection: encryptedPayloadsCollection,
-      keyWrapper: createConfiguredKeyWrapper(),
-    }),
+    payloadStore: await createConfiguredPayloadStore(),
     authorize: requireResourcePermission,
     listReadableSecretIds: createReadableSecretLister(),
     reconcileOwnerRelationships: reconcileSecretRefOwnerRelationships,

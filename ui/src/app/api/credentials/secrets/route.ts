@@ -139,6 +139,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     type: credentialSecretType(body.type),
     description: typeof body.description === "string" ? body.description : undefined,
     plaintext: rawValue,
+    id: typeof body.id === "string" && body.id.trim() ? body.id.trim() : undefined,
   });
 
   return successResponse(secret, 201);

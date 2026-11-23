@@ -58,6 +58,7 @@ RUN if [ -z "$AGENT_NAME" ]; then \
 ARG INSTALL_NETUTILS=false
 ARG INSTALL_AWS_CLI=false
 ARG INSTALL_KUBECTL=false
+ARG INSTALL_AZ_CLI=false
 
 RUN echo "https://packages.wolfi.dev/os" > /etc/apk/repositories && \
     for i in 1 2 3; do apk add --no-cache python-3.13 shadow && break; [ $i -lt 3 ] && sleep $((i * 5)); done && \
@@ -75,7 +76,19 @@ RUN echo "https://packages.wolfi.dev/os" > /etc/apk/repositories && \
     if [ "$INSTALL_KUBECTL" = "true" ]; then \
         for i in 1 2 3; do apk add --no-cache kubectl-1.36-default && break; [ $i -lt 3 ] && sleep $((i * 10)); done; \
     fi && \
+    if [ "$INSTALL_AZ_CLI" = "true" ]; then \
+        for i in 1 2 3; do apk add --no-cache py3.13-pip && break; [ $i -lt 3 ] && sleep $((i * 10)); done; \
+    fi && \
     apk upgrade --no-cache
+
+# Install Azure CLI (opt-in: --build-arg INSTALL_AZ_CLI=true). Pure-Python
+# package installed via pip into its own venv, kept separate from the agent's
+# uv-managed venv on PATH so dependency pins never collide.
+RUN if [ "$INSTALL_AZ_CLI" = "true" ]; then \
+        python3.13 -m venv /opt/azure-cli && \
+        /opt/azure-cli/bin/pip install --no-cache-dir azure-cli && \
+        ln -sf /opt/azure-cli/bin/az /usr/local/bin/az; \
+    fi
 
 # Install AWS CLI v2 (opt-in: --build-arg INSTALL_AWS_CLI=true)
 RUN if [ "$INSTALL_AWS_CLI" = "true" ]; then \

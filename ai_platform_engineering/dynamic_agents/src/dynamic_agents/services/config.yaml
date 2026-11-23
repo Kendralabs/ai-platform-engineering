@@ -85,6 +85,14 @@ mcp_servers:
     name: Woodpecker CI
     transport: http
 
+  - description: Direct kubectl-style control over AKS clusters (restart/scale
+      Deployments, pod logs/events) - kendralabs-only, opt-in
+    enabled: false
+    endpoint: ${KUBERNETES_OPS_MCP_URL:-http://localhost:18022/mcp}
+    id: kubernetes-ops
+    name: Kubernetes Ops
+    transport: http
+
   - description: Jira issue tracking and project management
     enabled: true
     endpoint: ${JIRA_MCP_URL:-http://localhost:18004/mcp}
@@ -124,6 +132,16 @@ mcp_servers:
         provider: webex
         target: header
 
+  - description: Observability stack (SigNoz + ClickHouse) read access and guarded component restarts
+    enabled: false
+    endpoint: ${OBSERVABILITY_OPS_MCP_URL:-http://localhost:18023/mcp}
+    id: observability-ops
+    name: Observability Ops
+    transport: http
+    # Kendralabs-only agent, opt-in via the `observability-ops-agent`
+    # compose profile - disabled by default, same as the other
+    # kendralabs-only Azure/Jenkins agents are not seeded here enabled.
+
   - description: Knowledge Base tools
     enabled: true
     endpoint: ${RAG_SERVER_MCP_URL:-http://localhost:9446/mcp}
@@ -139,6 +157,22 @@ mcp_servers:
         name: X-CAIPE-Provider-Token
         target: header
         fallback_client_credentials: true
+
+  - description: Jenkins CI Ops - Jenkins-on-AKS build/queue, ACR, Key Vault, and Terraform state visibility
+    enabled: true
+    endpoint: ${JENKINS_CI_OPS_MCP_URL:-http://localhost:18021/mcp}
+    id: jenkins-ci-ops
+    name: Jenkins CI Ops
+    transport: http
+    # No per-user OAuth provider for Jenkins; resolve the shared Jenkins API
+    # token via CAIPE's credential-exchange secret_ref, falling back to a
+    # static env var when credential-exchange isn't enabled.
+    credential_sources:
+      - kind: secret_ref
+        name: Authorization
+        target: header
+        secret_ref: jenkins-ci-ops/api-token
+        fallback_env: JENKINS_API_TOKEN
 
 # =============================================================================
 # Seed Agents

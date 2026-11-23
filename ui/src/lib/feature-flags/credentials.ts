@@ -1,4 +1,4 @@
-export type CredentialStoreBackend = "mongodb-envelope";
+export type CredentialStoreBackend = "openbao" | "mongodb-envelope";
 export type CredentialKeyProvider = "aws-kms" | "local-cmk" | "dev-local";
 
 export interface CredentialFeatureConfig {
@@ -10,7 +10,7 @@ export interface CredentialFeatureConfig {
   serviceAudience: string;
 }
 
-const DEFAULT_STORE_BACKEND: CredentialStoreBackend = "mongodb-envelope";
+const DEFAULT_STORE_BACKEND: CredentialStoreBackend = "openbao";
 const DEFAULT_KEY_PROVIDER: CredentialKeyProvider = "local-cmk";
 const DEFAULT_SERVICE_AUDIENCE = "caipe-credential-service";
 
@@ -25,7 +25,7 @@ function envBoolean(name: string): boolean {
 
 function credentialStoreBackend(): CredentialStoreBackend {
   const value = env("CREDENTIAL_STORE_BACKEND");
-  return value === "mongodb-envelope" ? value : DEFAULT_STORE_BACKEND;
+  return value === "mongodb-envelope" || value === "openbao" ? value : DEFAULT_STORE_BACKEND;
 }
 
 function credentialKeyProvider(): CredentialKeyProvider {
