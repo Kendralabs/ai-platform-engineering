@@ -7,6 +7,10 @@ Provides the complete file inventory, CI/CD pipeline specification, Helm/ArgoCD 
 Azure cluster & Key Vault live posture, and operational deployment steps to rollout KIAM onto Azure.
 
 1. **KIAM Monorepo Updates (`/Users/alpesh/Software/kiam/kiam`, committed & pushed `a0a7796` to `main`)**:
+   - **Centralized Deployment Contract & Authoritative Spec**:
+     - Added `deploy/spec/kiam-deployment-spec.yaml`: Machine-readable authoritative specification for services (`kiam-backend`: 5190, `kiam-backend-python`: 5191, `kiam-keycloak`: 8080), health probes, environment variable contracts, resource envelopes, and Key Vault secrets mapping (`database-user`, `database-password`, `keycloak-admin-password`, `keycloak-client-secret`, `jwt-secret`, `jwk-private-key`, `openfga-preshared-key`).
+     - Added validation script `scripts/verify-deployment-spec.sh` (validates YAML schema and cross-checks `kendrainfra` values).
+     - Policy: All deployments are centralized into `kendrainfra`, while `kiam` maintains the authoritative deployment specs so CAIPE and `kendrainfra` always have the source-of-truth service requirements.
    - **`Jenkinsfile`** (multi-stage CI/CD):
      - Stages: Parallel Unit Tests (`@kiam/shared`, `@kiam/backend`, `backend-python`), Multi-container Docker Build (`kiam-backend`, `kiam-backend-python`, `kiam-keycloak`), Trivy vulnerability scanner (`CRITICAL` check), ACR publishing to `kendrakendralabsacr.azurecr.io` with semantic Git SHA tags (`git-${GIT_COMMIT[0..7]}`).
      - Automated promotion to `dev` environment (`envs/dev/apps/kiam/values.yaml` in `kendrainfra`).
