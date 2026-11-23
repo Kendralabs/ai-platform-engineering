@@ -1,5 +1,56 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23k, caipe: critical backlog fully cleared; high-severity round 4 pushed)
+
+**Goal**: Continuing Dependabot remediation after Round 3 (certifi/anyio/authlib/
+next-auth/proxy-addr/shell-quote). Confirmed via direct `gh api` query that **all
+122 original critical-severity alerts are now `state: fixed` (0 open)** — the
+critical-severity backlog is fully closed after 3 rounds. Remaining at that point:
+1155 open (515 high / 580 medium / 60 low).
+
+**Round 4 (high-severity, delegated to subagents)**: user asked to do this round
+via parallel Agent-tool subagents rather than directly. Identified the 10
+highest-alert-count open high-severity packages (covering 406 of 515 open high
+alerts) and split them across 4 subagents:
+- aiohttp 3.14.1->3.14.4 (direct pin, 3 projects) + dnspython->2.9.2 (transitive,
+  ~26 projects).
+- mcp 1.28.1->1.30.0 (direct pin, 24 projects — all FastMCP servers; verified no
+  breaking API changes via test suites + import smoke-checks).
+- pypdf->6.21.4, pymongo->4.18.3 (direct pins, ~21 projects combined) +
+  cryptography->50.2.2, joserfc->1.8.0 (transitive). Bumping pymongo required
+  also bumping `langgraph-checkpoint-mongodb` 0.3.1->0.5.1 in root/dynamic_agents/
+  utils (it pinned `pymongo<4.16`) — done as a required side-fix, not scope creep.
+- urllib3->2.8.0, pyasn1->0.6.5, virtualenv->21.15.12 (all transitive). Root and
+  `utils` initially failed to re-lock (blocked by the same pymongo/langgraph-
+  checkpoint-mongodb conflict above, since subagents ran in parallel); finished
+  these two directories myself after the pymongo-fixing agent's change had
+  resolved the conflict.
+- All agents left changes uncommitted (no git add/commit/push) and reported
+  back; ruff/pytest run per touched project — all green, or pre-existing
+  failures independently confirmed via stash/dry-run comparisons (not
+  regressions from this round).
+- Staged exactly 63 touched files (pyproject.toml/uv.lock pairs across ~32
+  projects) — explicit `git add <files>`, never `-A`. Left the two untracked
+  `mcp/kubernetes_ops/pyproject.toml` / `mcp/observability_ops/pyproject.toml`
+  files alone (belong to a separate, unrelated in-progress infra agent-build
+  plan, not this CVE round) even though their `mcp` pin was incidentally bumped
+  by a subagent as a side effect of editing that file.
+- Committed (`fb71780d7`, no invented DCO per repo policy) and **pushed to
+  `origin` (`Kendralabs/ai-platform-engineering`) main only** —
+  `132a1bd98..fb71780d7`. Never pushes to `upstream` (`caipe-io/
+  ai-platform-engineering`); standing rule.
+
+### Outstanding
+- The remaining ~109 of 515 open high-severity alerts (lower-count packages:
+  Twisted, soupsieve, brace-expansion, node-forge, fast-uri, filelock, js-yaml,
+  langgraph-sdk, pnpm, fsspec, nanoid, oauthlib, browserslist, follow-redirects,
+  scrapy, transformers, Protego, black, image-size, joi, postcss, source-map-js,
+  zod, body-parser, compression, launch-editor, svgo) are untriaged — not yet
+  scoped or assigned, not to be started without further instruction.
+- ~580 medium / ~60 low alerts remain completely untriaged by package.
+- Re-check Dependabot alert counts after rescan lag clears to confirm this
+  round's 10 packages flip to `state: fixed`.
+
 ## Status Snapshot (2026-11-23j, infra: KIAM live deployment verified — Prisma migrations applied, SSL active, backend healthy)
 
 **Goal**: Complete live deployment and verification of KIAM on `kendra-kendralabs-aks` (namespace `core`) using centralized `kendrainfra` GitOps.
