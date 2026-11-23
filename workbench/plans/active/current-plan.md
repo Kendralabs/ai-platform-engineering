@@ -1,5 +1,56 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23f, kiam/infra: CI script centralization, deployment-spec convention noted)
+
+**Context**: Continuation of the 2026-11-23e KIAM handoff below. Investigated the KIAM
+Jenkinsfile this other session added, found its `scripts/cicd/*` dependencies duplicated
+inside the `kiam` app repo rather than the GitOps repo they operate on, and relocated them.
+Also surfaced a deployment-spec convention (`deploy/spec/<component>-deployment-spec.yaml`
+per app repo) that CAIPE is named as a consumer of but doesn't yet implement.
+
+1. **Moved GitOps CI scripts from `kiam` to `infra`** (both committed locally, **not pushed**):
+   - `kiam` (`eefdaad`, on top of `a0a7796`): removed `scripts/cicd/{set-image.sh,
+     check_deploy_values.py, smoke-test.sh}`; updated all 6 Jenkinsfile references
+     (3× inside `gitopsCommit()`, 3× smoke-test call sites) to `kendrainfra/scripts/cicd/...`,
+     since the pipeline already clones `kendrainfra` into the workspace before calling them.
+   - `infra` (`afab500`, on top of `43d0231`): added the same 3 scripts under
+     `scripts/cicd/`, with `Signed-off-by: Alpesh Doshi <alpesh.doshi@kendralabs.com>`.
+   - Rationale: these scripts edit/validate `kendrainfra` values files — repo-agnostic
+     logic that every future app's Jenkinsfile needs, so duplicating them per-app-repo
+     would drift. Verified pre-move that both scripts existed only in `kiam`
+     (`kiam/kiam/scripts/cicd/`), not `infra`, and that neither Docusaurus/infra-doc nor
+     the new `deploy/spec/` YAML (below) hardcodes the old `scripts/cicd` path, so the
+     move doesn't orphan any references.
+
+2. **`kiam` deployment-spec convention — verified real, not yet consumed by CAIPE**:
+   - `kiam` added `deploy/spec/kiam-deployment-spec.yaml` (authoritative machine-readable
+     spec: images/ports/health-probes/env-vars/Key-Vault-secret-contract/per-environment
+     resource envelopes for `kiam-backend`/`kiam-backend-python`/`kiam-keycloak`/
+     `kiam-frontend`) plus `deploy/spec/README.md`, and mirrored docs into both
+     `docs/website/docs/internal/` (Docusaurus) and `docs/infrastructure/` (raw markdown).
+   - Confirmed all 6 files exist on disk (not just claimed) and that the YAML's
+     `valuesPath`/`argoApplication` per environment match the ArgoCD Application names
+     already in `infra` (`kiam-dev.yaml`/`kiam-staging.yaml`/`core-kiam.yaml`), and that
+     its `OPENBAO_ADDR`/`OPA_URL` env vars line up with the OPA/OpenBao charts scaffolded
+     in the 2026-11-23d entry below — i.e. the spec assumes those services exist, which
+     is now true (though still unpushed/undeployed, see 2026-11-23d).
+   - **Gap**: the spec's own header states "CAIPE (ai_platform_engineering) consumes this
+     spec to audit, orchestrate, and validate runtime deployments" — no such consumer
+     exists in `caipe` yet. If `deploy/spec/<component>-deployment-spec.yaml` is meant to
+     be a general per-app-repo convention (one per project feeding a shared CAIPE-side
+     validator/auditor), that consumer is unbuilt and unplanned — distinct from the
+     already-tracked `jenkins_ci_ops`/`kubernetes_ops`/`observability_ops` MCP-agent plan
+     (`/Users/alpesh/.claude/plans/glistening-cooking-aho.md`), which is about *controlling*
+     infra, not *validating specs against* it.
+
+**Outstanding** (carried forward, unchanged unless noted):
+- Push `kiam` `eefdaad` and `infra` `afab500` — offered, not yet confirmed.
+- Everything from 2026-11-23d (OPA/OpenBao/SPIRE: push `infra` `485ab3c`, apply ArgoCD
+  Applications, real SPIFFE wiring) — still outstanding.
+- New: decide whether to build a CAIPE-side `deploy/spec` consumer/validator, and whether
+  the spec-file convention should be formalized as a standing per-app-repo pattern before
+  more projects adopt it ad hoc.
+
 ## Status Snapshot (2026-11-23e, kiam: Jenkins CI/CD pipeline, GitOps promotion manifests, frontend fixes, and deployment readiness)
 
 **Context**: Handoff from KIAM project to CAIPE (which manages the infrastructure deployment).
