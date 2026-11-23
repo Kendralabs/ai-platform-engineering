@@ -1,5 +1,23 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23h, infra: KIAM deployment audit — PostgreSQL SSL fix, migration job hook, probes, in-cluster frontend)
+
+**Context**: Comprehensive audit of `kendrainfra` (`~/Software/infra/charts/kiam`) against live AKS cluster `kendra-kendralabs-aks` (core namespace) and `kiam` deployment specification.
+
+1. **Root-Cause Fix for Azure PostgreSQL Connection Failure**:
+   - Live pod inspection revealed `kiam-backend-5fc945f5-kcbxt` in `core` failing database queries: `Code 28000: no pg_hba.conf entry for host "10.0.1.9", user "kiam_app", database "kiam_ums", no encryption`.
+   - Azure PostgreSQL Flexible Server enforces TLS (`require_secure_transport = on`).
+   - Fixed in `charts/kiam/templates/deployment.yaml`: Appended `?sslmode={{ .Values.backend.env.sslMode | default "require" }}` to `DATABASE_URL`.
+2. **Added Missing Database Migration & Seeding Hook (`charts/kiam/templates/job-migrate-seed.yaml`)**:
+   - `charts/kiam` previously ran `node dist/index.js` directly without applying Prisma migrations. On fresh Azure Postgres databases, `kiam_ums` was blank (0 tables).
+   - Created `job-migrate-seed.yaml` as Helm `post-install,post-upgrade` hook to run `npx prisma migrate deploy` and idempotent seeding automatically.
+3. **Added Missing Probes & Frontend Templates**:
+   - Added `readinessProbe` and `livenessProbe` on `/health` (port 3012) in `deployment.yaml`.
+   - Added optional in-cluster frontend templates (`deployment-frontend.yaml`, `service-frontend.yaml`) gated by `frontend.enabled`.
+4. **Commits Pushed**:
+   - `kendrainfra`: `f34c09f` (`charts/kiam/`).
+   - `kiam`: `f5ae8d0` (`deploy/spec/kiam-deployment-spec.yaml`).
+
 ## Status Snapshot (2026-11-23g, caipe: PyJWT + Next.js CVE remediation pushed)
 
 **Goal**: GitHub surfaced 1887 open Dependabot alerts (122 critical, 773 high, 916 moderate,
