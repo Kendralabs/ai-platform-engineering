@@ -1,5 +1,17 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23j, infra: KIAM live deployment verified — Prisma migrations applied, SSL active, backend healthy)
+
+**Goal**: Complete live deployment and verification of KIAM on `kendra-kendralabs-aks` (namespace `core`) using centralized `kendrainfra` GitOps.
+
+- **Prisma Schema Migrations**: All 22 Prisma database migrations successfully applied to Azure PostgreSQL Flexible Server (`kendra-kendralabs-pg.postgres.database.azure.com`) via `kiam-migrate-and-seed` Job. Tables (`User`, `Organization`, `Membership`, `Session`, `Agent`, `AccessRequest`, etc.) created.
+- **TLS/SSL Encryption Active**: `sslmode=require` active on `DATABASE_URL`; connection error (`Code 28000: no pg_hba.conf entry ... no encryption`) eliminated.
+- **ArgoCD Sync**: `core-kiam` is `Synced` and `Healthy` at commit `fc3dd93`.
+- **Live Workload Status**:
+  - `kiam-backend-699fddd96d-6bf5s`: `1/1 Running` (HTTP 200 on `/health`, Prisma connection active, FGA authorization model written).
+  - `kiam-backend-python-748bcc7cf7-4f7pb`: `1/1 Running`.
+  - `kiam-keycloak-b89d9fcbb-hmf4q`: `1/1 Running` (realm `kendra` imported).
+
 ## Status Snapshot (2026-11-23i, caipe: certifi/anyio/authlib/next-auth/proxy-addr/shell-quote CVE remediation pushed)
 
 **Goal**: Continuing the Dependabot critical-alert remediation (started at 1887 open
