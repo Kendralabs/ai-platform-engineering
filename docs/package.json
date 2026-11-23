@@ -61,6 +61,8 @@
     "webpack-dev-server": "5.2.5",
     "dompurify": "3.4.11",
     "http-proxy-middleware": "3.0.7",
-    "tinypool": "2.1.2"
+    "tinypool": "2.1.2",
+    "proxy-addr": "2.0.8",
+    "shell-quote": "1.11.0"
   }
 }
