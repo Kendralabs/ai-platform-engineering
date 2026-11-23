@@ -51,6 +51,27 @@ alerts) and split them across 4 subagents:
 - Re-check Dependabot alert counts after rescan lag clears to confirm this
   round's 10 packages flip to `state: fixed`.
 
+## Status Snapshot (2026-11-23m, infra/kiam: in-cluster frontend git-193cf4c live on AKS, unprivileged nginx, 200 OK)
+
+**Goal**: Build, promote, and deploy the KIAM in-cluster frontend on `kendra-kendralabs-aks` (namespace `core`).
+
+- **Frontend Build & Push**:
+  - Resolved 9 unused-import TypeScript errors in `DelegationLineageTree.tsx`, `Rfc8693TokenInspector.tsx`, `SupervisorApprovalQueue.tsx`, `DelegationExplorerPage.tsx`, and `TokenUsageAnalyticsPage.tsx`.
+  - Built production SPA bundle (`apps/frontend/dist`) cleanly with Vite in 2.0s.
+  - Used `nginxinc/nginx-unprivileged:1.27-alpine` to ensure compliance with pod security standards (`runAsNonRoot: true`, `runAsUser: 1000`).
+  - Built and pushed `kendrakendralabsacr.azurecr.io/kiam-frontend:git-193cf4c` (and `:latest`) in 55s via ACR task `dte`.
+- **GitOps Promotion**:
+  - Set `frontend.enabled: true` and image tag `git-193cf4c` in `charts/kiam/values-azure.yaml` and `envs/prod/apps/kiam/values.yaml` in `Kendralabs/kendrainfra` (`b679f79`).
+- **Cluster Deployment Verified**:
+  - Reconciled `core-kiam` in ArgoCD. Pod `kiam-frontend-55fb6958b6-lpbgs` rolled out to `1/1 Running` (0 restarts).
+  - Verified live in-cluster HTTP response: `GET http://kiam-frontend:8080/` answers HTTP 200 OK with `text/html`.
+  - Verified SPA client-side fallback: `GET http://kiam-frontend:8080/onboarding` answers HTTP 200 OK.
+- **Complete KIAM Suite Live on Azure**:
+  - `kiam-backend` (Node.js/Prisma/OpenFGA, `git-b25e99e`): `1/1 Running`.
+  - `kiam-frontend` (Vite/React/Nginx, `git-193cf4c`): `1/1 Running`.
+  - `kiam-backend-python` (FastAPI/SPIRE, `100b350`): `1/1 Running`.
+  - `kiam-keycloak` (Keycloak 22/26, `c06868c`): `1/1 Running`.
+
 ## Status Snapshot (2026-11-23l, infra/kiam: backend git-b25e99e deployed, Keycloak admin token working, JWKS & health 200 OK)
 
 **Goal**: Promote the fresh KIAM backend image with Keycloak client-credentials grant into `kendrainfra`, reconcile ArgoCD, and verify zero 401 errors on AKS.
