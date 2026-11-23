@@ -2227,3 +2227,50 @@ asked to check two unrelated pods stuck in `ImagePullBackOff` (`kcg`, `kendra-ai
 ### Outstanding
 - Same longer-term items as 2026-11-23p: real images/CI needed for both `kcg` and
   `kendra-ai-gateway` before either override can be removed.
+
+## 2026-11-23r — ArgoCD fleet sweep, ClickHouse scheduling deadlock fix, Jenkins Slack notifications
+
+- **ArgoCD fleet sweep**: `kubectl get applications -n argocd` over all Applications found 10
+  Synced/Healthy, `kendra-services-root-azure` OutOfSync (benign — its app-of-apps children
+  `core-korchestrator-api`/`core-opa`/`core-openbao` don't exist live yet, not an unhealthy
+  resource), and `core-clickhouse`/`core-clickhouse-signoz` both "Progressing" (stuck `Pending`
+  pods).
+- **ClickHouse root cause**: the Azure Disk CSI PVs for both instances carry a `required`
+  `nodeAffinity` pinning them to zone `swedencentral-3`; the only node in that zone is the
+  AKS system/default pool, tainted `CriticalAddonsOnly:NoSchedule`; the pod's existing
+  tolerations didn't cover it. Cluster-autoscaler's own `NotTriggerScaleUp` events explicitly
+  cite "node(s) didn't match PersistentVolume's node affinity" — scale-up can't fix a
+  zone-pinned PV. Permanently unschedulable both ways: every other node fails the PV's zone
+  requirement, the matching node rejects the taint.
+- **Fix**: added a `tolerations:` block to `charts/clickhouse/templates/statefulset.yaml` (none
+  existed before) + a default toleration for `CriticalAddonsOnly:NoSchedule` in
+  `charts/clickhouse/values.yaml`. One shared chart, no per-cloud override file, so this fixes
+  both `core-clickhouse` (`kcg` database) and `core-clickhouse-signoz` (`signoz` database) at
+  once. Verified via `helm template`. Committed `06297f5`, user-confirmed, pushed to
+  `origin/main`.
+- **KIAM / Jenkins access**: confirmed no public ingress exists for either by design (private
+  controllers). Used `kubectl port-forward` (backgrounded, `/tmp/*-port-forward.log`) as a
+  session-scoped local tunnel: KIAM frontend on `18080`, Jenkins on `18090`.
+- **Jenkins → Slack (`#dev-infra`) build notifications**: no Slack plugin, JCasC `unclassified:`
+  section, or notification of any kind existed before. Added:
+  - `slack` plugin entry to `charts/jenkins/plugins.txt` (deliberately-lean file — justified
+    inline per its own convention).
+  - `jenkins-slack-token` object added to the existing Key Vault CSI pattern in
+    `charts/jenkins/templates/secretproviderclass.yaml` (both `secretObjects` and
+    `parameters.objects`), and as a `JENKINS_SLACK_TOKEN` env var in `deployment.yaml`
+    (`secretKeyRef`, same pattern as `JENKINS_ADMIN_PASSWORD`).
+  - JCasC `credentials.system.domainCredentials` (string credential `jenkins-slack-token`,
+    value from `${JENKINS_SLACK_TOKEN}`) + `unclassified.slackNotifier` (`room: "#dev-infra"`)
+    in `charts/jenkins/templates/configmap-casc.yaml`.
+  - `slackSend` calls in the root `Jenkinsfile`'s `post { success {} failure {} }` blocks.
+  - Verified `helm template` renders cleanly. Committed `08a3626`, user-confirmed, pushed to
+    `origin/main`.
+
+### Outstanding
+- **`jenkins-slack-token` has no value in Key Vault yet** — a real Slack bot OAuth token
+  (`xoxb-...`) needs to be created and provisioned under that exact object name before
+  notifications actually fire; this is a provisioning step outside this repo's code.
+- Verify post-sync that `core-clickhouse`/`core-clickhouse-signoz` actually move to Healthy and
+  `clickhouse-0` pods leave `Pending` once ArgoCD picks up `06297f5`.
+- Same longer-term items as 2026-11-23p/q: real images/CI needed for `kcg` and
+  `kendra-ai-gateway` before either override can be removed.
