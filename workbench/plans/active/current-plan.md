@@ -1,5 +1,108 @@
 # Current Plan / Status
 
+## Status Snapshot (2026-11-23c, infra: Keycloak public exposure reversed — cloudflared disabled, SSH/kubectl-tunnel-only access)
+
+**Context**: immediately after the 2026-11-23b snapshot below confirmed `login.kendralabs.com`
+publicly reachable, the owner reversed course: Keycloak must **not** be publicly reachable at
+all — access only via a tunnel into the cluster — and username+password login must be enabled
+(for both the admin console and end-user/application login).
+
+1. **Clarified scope via two questions**: owner chose to remove the Cloudflare Tunnel route
+   entirely (not just restrict it), and confirmed "username and password" applies to both the
+   Keycloak admin console and the `kendra` realm's end-user/application login.
+2. **Username+password needed no change**: inspected `charts/kiam/files/realm/kendra-shared.json`'s
+   `kendra-loa-1-methods` authenticator sub-flow — `auth-username-password-form` is already
+   configured as an ALTERNATIVE method (alongside `webauthn-authenticator-passwordless`), and the
+   admin console already requires `KEYCLOAK_ADMIN`/`KEYCLOAK_ADMIN_PASSWORD`. Left as-is; not
+   elevated to REQUIRED/sole method (not explicitly asked for).
+3. **Public exposure removed**: `charts/kiam/values-azure.yaml` — set `cloudflared.enabled: false`
+   (was `true`), replacing the hostnameUrl/cloudflared comments to record the 2026-11-23 owner
+   decision and that `hostnameUrl` is deliberately left unchanged (`https://login.kendralabs.com`)
+   so realm issuer/redirect URIs don't need to change if public access is ever re-enabled.
+   Committed `d0ac859` (`Signed-off-by: Alpesh Doshi`), pushed to `Kendralabs/kendrainfra main`
+   (`9894b7e..d0ac859`).
+4. **Verified live**: forced an ArgoCD hard refresh on `core-kiam`; new `kiam-keycloak` pod has
+   only the `keycloak` container (no `cloudflared` sidecar) — confirmed via
+   `kubectl get pods -o jsonpath='...spec.containers[*].name'`. `curl
+   https://login.kendralabs.com/realms/kendra/.well-known/openid-configuration` now returns
+   **HTTP 530** (Cloudflare origin-unreachable) instead of a live OIDC document — public exposure
+   is confirmed dead even before the dashboard route itself is deleted.
+5. **Tunnel-in access documented**: no sshd on the Keycloak pod (AKS, not a VM) — the practical
+   equivalent is `kubectl -n core port-forward svc/kiam-keycloak 3013:3013`, using existing
+   `az aks get-credentials` kubeconfig access as the auth boundary. Add `127.0.0.1
+   login.kendralabs.com` to `/etc/hosts` locally to keep the realm's `KC_HOSTNAME_URL` checks
+   happy while tunneling in.
+
+### Outstanding
+- **Manual, not yet done**: delete the Cloudflare Tunnel public-hostname route for
+  `login.kendralabs.com` and its DNS CNAME from the Cloudflare dashboard (no API path for
+  tunnel-route deletion — same limitation as the earlier `keycloak.kendralabs.com` cleanup).
+- Clean up the now-unused `kiam-keycloak-cloudflare-tunnel-token` secret in
+  `kendra-kendralabs-kv` Key Vault.
+- If a true SSH bastion (not kubectl/AKS-RBAC-gated port-forward) is wanted instead, check
+  whether `infra` already provisions one — not investigated.
+- Everything else carried over from the 2026-11-23b snapshot below, unchanged.
+
+## Status Snapshot (2026-11-23b, infra: Keycloak realm-import fix landed, verified live; kiam-identity-admin provisioned to Key Vault; login.kendralabs.com confirmed publicly reachable)
+
+**Context**: continuing from the 2026-11-23 snapshot below — landing the already-designed fix for
+the Keycloak `${KENDRA_*}` realm-import placeholder failure, then resuming
+`docs/runbooks/azure-platform/04b-kiam-identity-admin-vault-provisioning.md`.
+
+1. **Realm-import fix committed and pushed**: `charts/kiam/templates/deployment-keycloak.yaml`,
+   `charts/kiam/values-azure.yaml`, `charts/kiam/values.yaml` (real `KENDRA_KIAM_*` values + 12
+   synthesized-but-valid placeholder URIs for not-yet-deployed components) committed as `9894b7e`
+   (`Signed-off-by: Alpesh Doshi`). My own `git push` was blocked by the Claude Code auto-mode
+   classifier ("Sensitive Information Leakage"); user ran the push themselves
+   (`fe0f0e8..9894b7e main -> main`).
+2. **Verified live**: forced an ArgoCD hard refresh on `core-kiam`; new `kiam-keycloak` pod's
+   Keycloak container logs showed `Realm 'kendra' imported` / `Import finished successfully` — no
+   recurrence of the original `A redirect URI is not a valid URI` error.
+3. **Ran runbook `04b` steps 2-6** (user confirmed): recreated a throwaway pod with the
+   `azure.workload.identity/use: "true"` label + `kendra-workload` ServiceAccount, pulled the
+   Keycloak-generated `kiam-identity-admin` client ID/secret via the new pod's IP directly (Service
+   DNS still routed to the stale pre-fix pod until the old pod was gone), logged in via
+   `az login --service-principal --federated-token ... --allow-no-subscriptions` (workload identity,
+   not classic managed identity), and wrote both `kiam-identity-admin-client-id` and
+   `kiam-identity-admin-client-secret` into `kendra-kendralabs-kv` (1-year expiry). Secret value
+   never left the throwaway pod's exec session. Deleted the pod; ran
+   `kubectl -n core rollout restart deploy/kiam-backend`.
+4. **End-to-end verification (this session)**: `kiam-backend` rollout succeeded; `kiam-secrets`
+   K8s Secret now contains both new keys plus `KIAM_KEYCLOAK_CLOUDFLARE_TUNNEL_TOKEN` (already
+   CSI-synced from Key Vault per the 2026-11-22 note — no separate provisioning needed); the old
+   pre-fix `kiam-keycloak` pod is gone, replaced by a single `2/2 Running` pod (keycloak +
+   cloudflared both healthy); **`https://login.kendralabs.com/realms/kendra/.well-known/openid-configuration`
+   returns HTTP 200 with a real Keycloak OIDC discovery document** — the original top-level goal
+   (public Keycloak reachability) is confirmed working end-to-end.
+
+### Outstanding
+- Entra ID App Registration Azure CLI script (broker IdP setup) — was blocked on the above, now
+  unblocked, not yet started.
+- Everything else carried over from the 2026-11-23 snapshot below, unchanged.
+
+## Status Snapshot (2026-11-23, infra: GitHub App installation-scope gap (issue #14) fixed+closed; stale Keycloak DNS cleaned up)
+
+**Context**: continuing from the 2026-11-22d snapshot below — issue #14 (GitHub App
+`kendralabs-jenkins-ci`, App ID 5804706, not authorized against `Kendralabs/KIAM`) and the
+stale `keycloak.kendralabs.com` DNS cleanup flagged in the 2026-11-22e Keycloak-exposure snapshot.
+
+1. **Issue #14 resolved**: user (org-admin) added `Kendralabs/KIAM` to the
+   `kendralabs-jenkins-ci` GitHub App's repository-access list via the GitHub UI (no API path
+   exists for this). Posted a comment on the issue recording the fix and closed it
+   (`https://github.com/Kendralabs/kendrainfra/issues/14`). The ~30-min background monitoring
+   loop watching this issue has been stopped.
+2. **Stale `keycloak.kendralabs.com` DNS record removed**: this CNAME (pointed at the same
+   Cloudflare Tunnel as `login.kendralabs.com`, left over from the hostname-naming back-and-forth
+   during Keycloak's public exposure work — see 2026-11-22e snapshot below) was deleted by the
+   user directly via the Cloudflare dashboard, since `cloudflared`'s CLI has no delete-DNS-route
+   command and the Cloudflare MCP connector wasn't reconnecting in this session.
+
+### Outstanding
+- ArgoCD still needs to sync `charts/kiam` (commit `ce05596`) before the `cloudflared` sidecar
+  rolls out and Keycloak becomes live at `https://login.kendralabs.com` — not yet reverified.
+- Entra ID App Registration script — still blocked on the above.
+- Everything carried over from the 2026-11-22d snapshot below, unchanged.
+
 ## Status Snapshot (2026-11-22d, infra: AKS node-networking root-cause fix; kiam Jenkins job created; GitHub App scope gap tracked in issue #14)
 
 **Context**: continuing the standing "trigger the rollout" instruction — checking whether
@@ -1531,3 +1634,44 @@ not pushed.
   go-ahead to push.
 - KCG's `kcg-db-admin-password` Key Vault question remains unresolved/blocking on their end; no
   further action from this session unless the user asks to pursue a vault-access-approved route.
+
+## 2026-11-22e — infra repo (~/Software/infra): Keycloak public exposure for Entra ID broker
+
+**Goal**: get Keycloak reachable at a real public hostname so a Microsoft Entra ID App
+Registration can be created for KIAM's Microsoft OIDC broker (redirect URI needs a live host —
+Keycloak previously had no public exposure at all, only a ClusterIP Service).
+
+- Created Cloudflare Tunnel `kendra-kendralabs-keycloak` (id `0bce641f-78fc-4298-a6d9-daa5c6055403`)
+  and routed DNS to `login.kendralabs.com` (not `keycloak.kendralabs.com` or `auth.kendralabs.com`
+  — both were rejected/already-in-use; the stale `keycloak.kendralabs.com` CNAME this created
+  along the way is still in the zone, unused — `cloudflared`'s CLI can create but not delete DNS
+  records, so that cleanup needs the dashboard/API).
+- Added a gated `cloudflared` sidecar to `charts/kiam` (mirrors `charts/jenkins`' existing
+  pattern exactly): `charts/kiam/values.yaml`, `values-azure.yaml`,
+  `templates/deployment-keycloak.yaml`, `templates/secretproviderclass.yaml`. Validated with
+  `helm template`/`helm lint` both with `cloudflared.enabled=true` and the default-disabled
+  render.
+- Stored the tunnel token in Azure Key Vault `kendra-kendralabs-kv` as
+  `kiam-keycloak-cloudflare-tunnel-token`. This required two temporary, explicitly
+  user-approved changes to the vault, both reverted immediately after: (1) granted my CLI
+  identity `set` secret permission (user ran the access-policy grant), (2) briefly flipped
+  `publicNetworkAccess` to `Enabled` and added my IPv4 to the firewall allowlist (vault is
+  normally private-link-only with an IP-restricted public path) — both reverted back to
+  `Disabled`/original allowlist right after the secret was written.
+- Committed (`ce05596`, human-provided DCO: `Alpesh Doshi <alpesh.doshi@kendralabs.com>`) and
+  pushed to `Kendralabs/kendrainfra` main (`e4cb863..ce05596`) — **only** the 4 kiam chart files;
+  left the repo's large amount of unrelated pre-existing modified/untracked files untouched.
+- Declined, without being asked to stop, two destructive/shared-infra actions the auto-mode
+  classifier blocked on the first attempt (DNS route to a hostname already live for something
+  else; writing Key Vault before having `set` permission) — surfaced each to the user for an
+  explicit decision rather than finding a workaround.
+
+### Outstanding
+- `charts/kiam` is committed+pushed, but ArgoCD still needs to sync before the `cloudflared`
+  sidecar actually rolls out and Keycloak becomes reachable at `https://login.kendralabs.com`.
+- Stale unused DNS record `keycloak.kendralabs.com` (CNAME to the same tunnel) was never
+  cleaned up — needs the Cloudflare dashboard/API, not `cloudflared` CLI.
+- Entra ID App Registration script (sign-in audience `AzureADMultipleOrgs`, redirect URI
+  `https://login.kendralabs.com/realms/kendra/broker/microsoft/endpoint`, Graph delegated
+  permissions, admin consent, 2-year client secret) — not yet run; was blocked on exactly this
+  hostname existing, which is now resolved pending the ArgoCD sync above.
