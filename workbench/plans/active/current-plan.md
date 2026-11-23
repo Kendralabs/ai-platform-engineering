@@ -2192,3 +2192,35 @@ asked to check two unrelated pods stuck in `ImagePullBackOff` (`kcg`, `kendra-ai
   (currently `2` in base `values.yaml`).
 - Once ArgoCD syncs the `796136f` commit, confirm both Deployments actually scale to 0 and the
   `ImagePullBackOff` pods stop being recreated.
+
+## 2026-11-23q — kaig `replicaCount: 0` fix follow-up: autoscaling-gated template bug + push divergence
+
+**Goal**: verify the `796136f` fix actually took effect via ArgoCD sync status, then resolve why
+`kendra-ai-gateway` was still showing a live pod.
+
+- Checked ArgoCD sync/health on `core-kcg` and `core-kaig`: `kcg` confirmed fully scaled to 0
+  (`0/0/0/0`, Synced/Healthy). `kaig` showed Synced at the right revision but Health "Degraded"
+  with a stale `operationState.finishedAt` — the `replicaCount: 0` override had **no effect**.
+- Root cause: `charts/kendra-ai-gateway/templates/deployment.yaml` only renders `replicas:` when
+  `not .Values.autoscaling.enabled`; base `values.yaml` sets `autoscaling.enabled: true` by
+  default (HPA `minReplicas: 2`), so the key was omitted entirely from the rendered manifest and
+  Kubernetes kept the previously-applied replica count. `kcg`'s chart has no such gating, which is
+  why its identical override worked first try.
+- **Fix**: confirmed via local `helm template test charts/kendra-ai-gateway -f values-azure.yaml`
+  (no `replicas:` key before, `replicas: 0` + no HPA after), then added
+  `autoscaling: enabled: false` alongside the existing `replicaCount: 0` in
+  `charts/kendra-ai-gateway/values-azure.yaml`. Committed as `a8486e2` (human DCO
+  `Alpesh Doshi <alpesh.doshi@kendralabs.com>`, user-confirmed).
+- **Push hit a genuine branch divergence**, not a permission block: `origin/main` had advanced
+  with 2 unrelated automated commits ("kiam: dev 26617b2" x2, touching only
+  `envs/dev/apps/kiam/values.yaml`) landed on top of the same `796136f` ancestor. `git rebase`
+  failed (repo has a large body of the user's own unrelated pre-existing unstaged/untracked work,
+  left untouched throughout); `git merge --ff-only` failed (genuine divergence). Resolved with
+  `git merge --no-ff origin/main` (clean, no conflicts — different files), then pushed the merge
+  commit `fc265c7` to `Kendralabs/kendrainfra` main.
+
+### Outstanding
+- Confirm ArgoCD re-syncs `core-kaig` on `fc265c7` and the `kendra-ai-gateway` Deployment actually
+  drops to 0 replicas / HPA disappears (mirror the `kcg` verification).
+- Same longer-term items as 2026-11-23p: real images/CI needed for both `kcg` and
+  `kendra-ai-gateway` before either override can be removed.
