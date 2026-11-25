@@ -26,6 +26,29 @@ The Helm chart can deploy MCP servers with `mcp-*` aliases:
 | `mcp-webex` | Webex workspace operations |
 | `mcp-netutils` | Network utility tools |
 
+## Infrastructure Control Agents
+
+These agents give CAIPE real control (not just read-only reporting) over a
+live infra stack: CI, Kubernetes, observability, and Azure. Each is opt-in via
+its own Compose/Helm profile — none are part of the default minimal bundle.
+
+| Agent | Scope | Write actions |
+|---|---|---|
+| `jenkins-ci-ops` | Jenkins-on-AKS build/queue, ACR, Key Vault, Terraform state visibility | Tier-3 actions (`terraform_apply`, `keyvault_set_secret`) are deliberately stubbed — infra-apply and secret-write risk require a separate reviewed approval gate |
+| `kubernetes-ops` | Pod/Deployment/StatefulSet status, logs, events beyond what ArgoCD's own Application API covers | `confirm=True`-gated: rollout restart, scale, delete pod |
+| `observability-ops` | SigNoz query-service + the dedicated `signoz` ClickHouse database: service health, trace/log/metric queries | `confirm=True`-gated: restart an unhealthy observability component (delegates to `kubernetes-ops`) |
+| `azure-power-ops` | Power on/off and status for Azure compute (AKS clusters, VMs) by customer environment | Live: `az aks start/stop` |
+| `azure-cost-ops` | Cost/spend analysis and budget reporting across Azure subscriptions | Read-only |
+| `azure-cluster-ops` | AKS cluster lifecycle: scale, upgrade, node pool status | Live, by customer environment |
+| `azure-core-services-ops` | Shared Azure platform services: Key Vault, networking, storage | Live status/control |
+
+Credentials for the Azure-scoped agents use a dedicated service-principal
+pattern (`ARM_CLIENT_ID/SECRET/TENANT_ID/SUBSCRIPTION_ID`), resolved either
+from a plain env var or, when `CAIPE_CREDENTIALS_ENABLED=true`, via CAIPE's
+OpenBao-backed credential-exchange API — never dropped into `.env` directly.
+`kubernetes-ops` and `jenkins-ci-ops` never take a raw shell/SQL passthrough:
+every action is a fixed, named tool, not an arbitrary command.
+
 ## Runtime Flow
 
 ```mermaid

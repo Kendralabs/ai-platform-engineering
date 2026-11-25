@@ -174,6 +174,58 @@ mcp_servers:
         secret_ref: jenkins-ci-ops/api-token
         fallback_env: JENKINS_API_TOKEN
 
+  - description: Azure Power Ops - power on/off and status for Azure compute (AKS clusters, VMs) by customer environment
+    enabled: true
+    endpoint: ${AZURE_POWER_OPS_MCP_URL:-http://localhost:18017/mcp}
+    id: azure-power-ops
+    name: Azure Power Ops
+    transport: http
+    credential_sources:
+      - kind: secret_ref
+        name: ARM_CLIENT_SECRET
+        target: env
+        secret_ref: azure-power-ops/arm-client-secret
+        fallback_env: AZURE_POWER_OPS_ARM_CLIENT_SECRET
+
+  - description: Azure Cost Ops - cost/spend analysis and budget reporting across Azure subscriptions
+    enabled: true
+    endpoint: ${AZURE_COST_OPS_MCP_URL:-http://localhost:18018/mcp}
+    id: azure-cost-ops
+    name: Azure Cost Ops
+    transport: http
+    credential_sources:
+      - kind: secret_ref
+        name: ARM_CLIENT_SECRET
+        target: env
+        secret_ref: azure-cost-ops/arm-client-secret
+        fallback_env: AZURE_COST_OPS_ARM_CLIENT_SECRET
+
+  - description: Azure Cluster Ops - AKS cluster lifecycle (scale, upgrade, node pool status) by customer environment
+    enabled: true
+    endpoint: ${AZURE_CLUSTER_OPS_MCP_URL:-http://localhost:18019/mcp}
+    id: azure-cluster-ops
+    name: Azure Cluster Ops
+    transport: http
+    credential_sources:
+      - kind: secret_ref
+        name: ARM_CLIENT_SECRET
+        target: env
+        secret_ref: azure-cluster-ops/arm-client-secret
+        fallback_env: AZURE_CLUSTER_OPS_ARM_CLIENT_SECRET
+
+  - description: Azure Core Services Ops - status/control for shared Azure platform services (Key Vault, networking, storage)
+    enabled: true
+    endpoint: ${AZURE_CORE_SERVICES_OPS_MCP_URL:-http://localhost:18020/mcp}
+    id: azure-core-services-ops
+    name: Azure Core Services Ops
+    transport: http
+    credential_sources:
+      - kind: secret_ref
+        name: ARM_CLIENT_SECRET
+        target: env
+        secret_ref: azure-core-services-ops/arm-client-secret
+        fallback_env: AZURE_CORE_SERVICES_OPS_ARM_CLIENT_SECRET
+
 # =============================================================================
 # Seed Agents
 # =============================================================================
