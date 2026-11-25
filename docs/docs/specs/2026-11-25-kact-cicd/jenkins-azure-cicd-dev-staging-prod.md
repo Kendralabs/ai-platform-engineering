@@ -39,17 +39,22 @@ Two separate GitHub Apps, deliberately not one:
 
 | App | Scope | Used for | Install status |
 |---|---|---|---|
-| (existing `kact` CI app) | — | kact's own Jenkinsfile build/test (credential id `kact-gitops-app`) | installed, in use (PR #58, #59 merged) |
-| `kact-gitops` (App ID `5824233`) | Contents: write, Metadata: read | The `kendrainfra` commit step only — narrowest scope that can write `values.yaml` | **not yet installed on `Kendralabs/kendrainfra`** |
+| `kendralabs-jenkins-ci` | — | Checkout/webhooks on selected repos | Installed org-wide; whether `Kendralabs/kact` is on its install list is **unconfirmed** (API returned 401 during review) |
+| `kact-gitops` (App ID `5824233`) | Contents: write, Metadata: read | The `kendrainfra` commit step only — narrowest scope that can write `values.yaml` | **Not yet installed on `Kendralabs/kendrainfra`** |
+
+The Jenkins credential id `kact-gitops-app` is meant to hold the second
+App's (`kact-gitops`) ID + key, for kact's Jenkinsfile to use on the
+kendrainfra digest-commit step only — it does not exist on the Jenkins
+controller yet (pending the `kendra-ci` change request below). PR #58/#59
+only changed kact's Jenkinsfile and docs; nothing has run on a controller
+yet, so neither App should be read as "in use."
 
 `kact-gitops`'s private key and app ID live in Key Vault
 `kendra-kendralabs-kv` (names only — no values here). Written from an
 in-cluster pod via workload identity `kendra-workload`, because the vault
-is private-network-only; this is the same in-cluster-pod write pattern
-used for `jenkins-slack-token` and the Azure agents' credentials — see
-`docker-compose-first-install`'s sibling runbooks and
+is private-network-only; see
 [`azure-power-ops-provisioning-runbook.md`](../2026-05-20-openbao-credential-exchange/azure-power-ops-provisioning-runbook.md)
-for the general pattern, not this specific secret.
+for the general in-cluster-pod write pattern (not this specific secret).
 
 ## Open items (as of 2026-11-25, per the kact project)
 
