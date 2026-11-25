@@ -2266,6 +2266,20 @@ asked to check two unrelated pods stuck in `ImagePullBackOff` (`kcg`, `kendra-ai
   - Verified `helm template` renders cleanly. Committed `08a3626`, user-confirmed, pushed to
     `origin/main`.
 
+## 2026-11-25 — Registered Azure infra agents for frontend discovery
+
+- Found `azure-power-ops`/`azure-cost-ops`/`azure-cluster-ops`/`azure-core-services-ops`
+  already wired into `docker-compose.yaml` + Helm but **missing from
+  `dynamic_agents/services/config.yaml`'s `mcp_servers`** — meaning the CAIPE UI never
+  listed them, even though `kubernetes-ops`/`observability-ops`/`jenkins-ci-ops` were
+  already registered.
+- Added all four with `credential_sources` (ARM_CLIENT_SECRET via secret_ref, same
+  OpenBao-backed credential-exchange pattern as `jenkins-ci-ops`). Validated the YAML
+  parses and lists all 12 infra-relevant agent ids.
+- Documented the full infra-control agent set (scope + write actions, Tier-3 stub caveat
+  for `jenkins-ci-ops`) in `docs/docs/agents/README.md`.
+- Committed `ecdd0dd60`.
+
 ### Outstanding
 - **`jenkins-slack-token` has no value in Key Vault yet** — a real Slack bot OAuth token
   (`xoxb-...`) needs to be created and provisioned under that exact object name before
