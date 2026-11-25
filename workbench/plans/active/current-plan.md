@@ -2288,3 +2288,25 @@ asked to check two unrelated pods stuck in `ImagePullBackOff` (`kcg`, `kendra-ai
   `clickhouse-0` pods leave `Pending` once ArgoCD picks up `06297f5`.
 - Same longer-term items as 2026-11-23p/q: real images/CI needed for `kcg` and
   `kendra-ai-gateway` before either override can be removed.
+- `ecdd0dd60` + this plan update not yet pushed to `origin/main` — pending confirmation.
+
+## 2026-11-25 — kact CI/CD cross-repo doc (requested by the kact project via another session)
+
+- Verified for the `kact` project (session "KACT"): caipe had no docs for its Azure CI/CD
+  pipeline (GitHub → Jenkins → kaniko/ACR → `kendrainfra` values.yaml commit → ArgoCD sync);
+  confirmed `jenkins_ci_ops`'s actual source lives only on unmerged branch
+  `prebuild/feat/infra-ops-mcp-local` — `main`'s copy is untracked with only stale `.pyc`
+  files, no source, despite `config.yaml` already listing `jenkins-ci-ops`. No ZAP/
+  caller-identity rules found in that server's README — flagged back to KACT as either a
+  gap or something living in a different layer (KACP/AgentGateway).
+- Added `docs/docs/specs/2026-11-25-kact-cicd/jenkins-azure-cicd-dev-staging-prod.md`:
+  the flow diagram, the "Jenkins never runs helm/kubectl" boundary, the two GitHub Apps
+  involved (names/scope only — `kact-gitops`, App ID `5824233`, Contents write + Metadata
+  read, key in Key Vault `kendra-kendralabs-kv`, not yet installed on `kendrainfra`), and
+  the kact project's own open items (PR #11, `kendra-ci` change request pending, env/secrets
+  not yet defined). Committed `ab59cd5a0`.
+
+### Outstanding
+- `ab59cd5a0` not yet pushed — pending confirmation (bundle with `ecdd0dd60` above).
+- Merging `prebuild/feat/infra-ops-mcp-local` to actually ship `jenkins_ci_ops` source on
+  `main` is a separate, not-yet-requested decision.
